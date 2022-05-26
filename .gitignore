@@ -1,0 +1,5 @@
+# Common ignore
+ignored/*
+
+# ignore experiment data
+data/*
