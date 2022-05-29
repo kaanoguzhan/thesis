@@ -1,14 +1,21 @@
+# %% ─────────────────────────────────────────────────────────────────────────────
 # Imports
+# ────────────────────────────────────────────────────────────────────────────────
 
-import h5py
-import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime
 import glob
+from datetime import datetime
 from pathlib import Path
 
+import h5py
+import matplotlib.pyplot as plt
+import numpy as np
 
-class ExperimentDataLoader:
+# ────────────────────────────────────────────────────────────
+# Class Definitions
+# ────────────────────────────────────────────────────────────
+
+
+class AWAKE_DataLoader:
     def __init__(self, experiment_name, img_dims):
         self.experiment_name = experiment_name
         self.data = self.load_experiment_data(experiment_name, img_dims)
@@ -18,12 +25,12 @@ class ExperimentDataLoader:
         files = glob.glob(f'data/{experiment_name}/*.h5')
         for i in range(0, len(files)):
             f = files[i]
-            ds = ExperimentData(f, img_dims)
+            ds = AWAKE_Data(f, img_dims)
             data.append(ds)
         return data
 
 
-class ExperimentData:
+class AWAKE_Data:
     def __init__(self, data_path, img_dims):
         self.data_path = data_path
         self.data = self.load_data()
