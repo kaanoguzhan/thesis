@@ -8,8 +8,10 @@ import argparse
 import io
 import os
 import sys
+import warnings
 from datetime import datetime
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -20,14 +22,19 @@ from utils.awake_data_loader import AWAKE_DataLoader
 from utils.beam_utils import get_window_around_beam_center
 from utils.general_utils import merge_pdfs, natural_sort
 
-sys.argv = ['']  # This Line will disable arguments parsing for this script but needed to run from Jupyter
+ENABLE_RUNNING_BY_JUPYTER_NOTEBOOK = False  # Set to True enable running from Jupyter Notebooks
+
+if ENABLE_RUNNING_BY_JUPYTER_NOTEBOOK:
+    sys.argv = ['']
+else:
+    matplotlib.use('Agg')
 
 # ─────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────
 
 DEFAULT_BEAM_WINDOW = 10
-DEFAULT_NUM_PSD_STEPS = 1
+DEFAULT_NUM_PSD_STEPS = 70
 
 adl = AWAKE_DataLoader('awake_1', [512, 672])
 
@@ -44,6 +51,9 @@ args = parser.parse_args()
 # ─────────────────────────────────────────────────────────────
 # Settings
 # ─────────────────────────────────────────────────────────────
+
+warnings.filterwarnings("ignore")
+
 plt.rcParams.update({
     'figure.figsize': [15, 10],
     'savefig.transparent': False,
@@ -52,7 +62,7 @@ plt.rcParams.update({
 
 
 # Sets up log directory with timestamp
-logdir = "logs/" + datetime.now().strftime("%Y.%m.%d-%H_%M_%S") + f'_FFTDenoising_window{args.beam_window}'
+logdir = "logs/" + datetime.now().strftime("%Y.%m.%d-%H_%M_%S") + f'_AWAKE_FFT_Denoising-window{args.beam_window}'
 # Creates a file writer for the log directory.
 file_writer = tf.summary.create_file_writer(logdir)
 
@@ -64,6 +74,7 @@ print(f'\
     Log directory: {logdir}\n\
     ----------------------------------------\n\
     ')
+
 
 # %% ─────────────────────────────────────────────────────────────────────────────
 # Function definitions
@@ -115,7 +126,7 @@ def fft_filter(signal, psd_cutoff, plot_steps=False):
         fig, axs = plt.subplots(4, 1, figsize=(20, 22))
         fig.tight_layout()
         plt.subplots_adjust(hspace=0.3)
-        
+
         plt.sca(axs[0])
         plt.plot(t_experiment, signal, color='k')
         plt.plot(t_experiment, signal, 'o', color='k', label='Noisy signal')
@@ -130,7 +141,7 @@ def fft_filter(signal, psd_cutoff, plot_steps=False):
         plt.plot([freq[0], freq[-1]], [psd_cutoff, psd_cutoff], '--', color='tab:orange', label='PSD cutoff')
         plt.xlim(freq[0], freq[-1])
         plt.title(f'Power Spectral Density before filtering')
-        plt.xlabel('Frequency (Hz)')
+        plt.xlabel('Frequency')
         plt.ylabel('Power Spectrum |Fn|^2')
         plt.legend()
 
@@ -140,7 +151,7 @@ def fft_filter(signal, psd_cutoff, plot_steps=False):
         plt.plot([freq[0], freq[-1]], [psd_cutoff, psd_cutoff], '--', color='tab:orange', label='PSD cutoff')
         plt.xlim(freq[0], freq[-1])
         plt.title(f'Power Spectral Density after filtering')
-        plt.xlabel('Frequency (Hz)')
+        plt.xlabel('Frequency')
         plt.ylabel('Power Spectrum |Fn|^2')
         plt.legend()
 
@@ -241,7 +252,7 @@ def fft_filter_img(img, psd_cutoff, plot=False, return_plot=False):
         # plt.ylim(0, psd_cutoff*10)
         axs[1].yaxis.set_major_formatter(FormatStrFormatter('%.6f'))
         plt.title(f'Power Spectral Density')
-        plt.xlabel('Frequency (Hz)')
+        plt.xlabel('Frequency')
         plt.ylabel('Power Spectrum |Fn|^2')
         plt.legend()
 
@@ -255,7 +266,7 @@ def fft_filter_img(img, psd_cutoff, plot=False, return_plot=False):
         plt.ylim(0, psd_cutoff*10)
         axs[2].yaxis.set_major_formatter(FormatStrFormatter('%.7f'))
         plt.title(f'Power Spectral Density after filtering (PSD cutoff = {psd_cutoff:0.9f})')
-        plt.xlabel('Frequency (Hz)')
+        plt.xlabel('Frequency')
         plt.ylabel('Power Spectrum |Fn|^2')
         plt.legend()
 
@@ -301,7 +312,7 @@ temp_img = get_window_around_beam_center(temp_img, args.beam_window)
 
 tif = temp_img.copy()
 
-for psd_cutoff in np.logspace(-2, -6, args.num_psd_steps)[::-1]:
+for idx, psd_cutoff in enumerate(np.logspace(-2, -6, args.num_psd_steps)[::-1]):
     tif, filter_plot = fft_filter_img(img=temp_img.copy(), psd_cutoff=psd_cutoff, plot=True, return_plot=True)
 
     fig, axs = plt.subplots(4, 1, figsize=(20, 16))
@@ -329,7 +340,7 @@ for psd_cutoff in np.logspace(-2, -6, args.num_psd_steps)[::-1]:
     plt.title('Difference (Denoised Image + Heatmap)')
     divider = make_axes_locatable(axs[2])
     cax = divider.append_axes("right", size="5%", pad=0.05)
-    zeros = np.ones([100,10])
+    zeros = np.ones([100, 10])
     plt.imshow(zeros, vmax=1, vmin=0, cmap='gray')
     # Hide everything for the colorbar
     cax.xaxis.set_ticks_position('none')
@@ -389,7 +400,7 @@ for psd_cutoff in np.logspace(-2, -6, args.num_psd_steps)[::-1]:
         if filter_plot is not None:
             tf.summary.image('Denoising Plots (PSD cutoff = step/1000000000)', filter_plot, step=np.ceil(psd_cutoff*1000000000))
 
-    print(f'PSD cutoff: {psd_cutoff} | {np.ceil(psd_cutoff*1000000000)}')
+    print(f'{idx+1}/{args.num_psd_steps} | PSD cutoff: {psd_cutoff:0.9f}')
 
 
 # %% ─────────────────────────────────────────────────────────────────────────────
