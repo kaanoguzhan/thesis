@@ -88,7 +88,7 @@ print(f'\
     ')
 
 # %% ─────────────────────────────────────────────────────────────────────────────
-# Image loading
+# Image loading and splitting into sub-images
 # ────────────────────────────────────────────────────────────────────────────────
 
 # Load Image using AWAKE_DataLoader
@@ -119,21 +119,23 @@ plt.imshow(beam_center, vmax=5000)
 tmp_beam_center = beam_center.copy()
 psd_cutoff = 0.1
 
-
-# Split image into N parts
-N = 10
-# img_split = np.array_split(tmp_beam_center, N, axis=0)
+# Split image into sub-images with windows size of SPLIT_WINDOW_SIZE and stride of SPLIT_STRIDE
 img_splits = split_image_with_stride(image=tmp_beam_center, window_size=SPLIT_WINDOW_SIZE, stride=SPLIT_STRIDE)
 
-# %%
-# Display splitted images
-for img_split in img_splits:
-    plt.figure(figsize=(15, 10))
-    plt.imshow(img_split, vmax=5000)
+# Concat all images in img_split on top of eachother and leave 5 zeros layer between each image
+img_cat = np.zeros(((img_splits[0].shape[0]+5) * len(img_splits) - 5, img_splits[0].shape[1]))
 
-# %%
+for idx, img_split in enumerate(img_splits):
+    img_cat[idx*(img_splits[0].shape[0])+(idx)*5:(idx+1)*(img_splits[0].shape[0])+(idx)*5, :] = img_split
+
+# Plot it for sanity check
+plt.figure(figsize=(15, 10))
+plt.imshow(img_cat, vmax=5000)
 
 
+# %% ─────────────────────────────────────────────────────────────────────────────
+# Applying FFT filter and then doing the PSD analysis
+# ────────────────────────────────────────────────────────────────────────────────
 def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, plot=False, return_plot=False):
     """
     Returns a fft filtered image.
@@ -149,7 +151,7 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, plot=False, return_plot=
     signal = (signal - signal_min) / (signal_max - signal_min)
     signal_org = signal.copy()
 
-    t_exp = np.arange(len(signal))
+    t_exp = np.arange(len(signal), dtype=np.int32)
 
     # Compute Fourier Coefficients of the f_sample signal
     # Fourier Coefficients have magnitude and phase
@@ -174,7 +176,6 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, plot=False, return_plot=
         psd_cutoff_max = np.inf
         psd_cutoff_min = psd_cutoff
     indices = np.logical_and(p_s_d > psd_cutoff_min, p_s_d < psd_cutoff_max)
-    # indices = np.zeros((len(p_s_d),), dtype=bool)
 
     # Zero out smaller Fourier coefficients and their corresponding frequencies
     # Boradcast Fn to the same shape as img_shape
@@ -193,11 +194,9 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, plot=False, return_plot=
         img[i] = np.real(img_ifft[:img_shape[1]])
 
     signal_clean = np.sum(img, axis=0)
-    signal_clean_max = np.max(signal_clean)
-    signal_clean_min = np.min(signal_clean)
-    signal_clean = (signal_clean - signal_clean_min) / (signal_clean_max - signal_clean_min)
-
-    # t_exp = np.arange(len(signal)/2, dtype=np.int32)
+    # signal_clean_max = np.max(signal_clean)
+    # signal_clean_min = np.min(signal_clean)
+    # signal_clean = (signal_clean - signal_clean_min) / (signal_clean_max - signal_clean_min)
 
     if plot:
         # Plotting denoising results
@@ -210,7 +209,7 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, plot=False, return_plot=
         plt.plot(t_exp, signal_org, 'o', color='k', label='Noisy signal')
         plt.xlim(t_exp[0], t_exp[-1])
         plt.title('Noisy signal')
-        plt.ylim(0, 1)
+        plt.ylim(np.min(signal_org), np.max(signal_org))
         plt.grid()
         plt.legend()
 
@@ -317,11 +316,44 @@ for i in range(len(img_splits)):
                                   global_step=j)
 
 # %%
-for img_sp in img_split:
-    plt.figure(figsize=(15, 10))
-    plt.imshow(img_sp, vmax=5000)
-
-# %%
 all_results = np.array(all_results)
 
-all_results[0][0].shape
+all_results.shape
+
+sum_of_signal_clean = np.sum(all_results[:, 1], axis=0)
+sum_of_signal_clean.shape
+
+# plot the sum of the signal
+xlim = (0, 100)
+plt.figure(figsize=(15, 10))
+color = np.random.rand(10000, 3,)
+for idx, clean in enumerate(all_results[:, 1]):
+    plt.plot(clean, 'o', markersize=4, color=color[idx], label=f'Clean-{idx}')
+    plt.plot(clean, color=color[idx])
+# plt.plot(sum_of_signal_clean)
+plt.xlim(xlim)
+plt.xticks(np.arange(0, xlim[1]+1, 5))
+plt.grid()
+plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+plt.title(f'Clean signals | PAD:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
+file_name = f'clean_signals_' +\
+            f'pad_{PADDING_MULTIPLIER}_' +\
+            f'xlim{xlim[0]}-{xlim[1]}.pdf'
+plt.savefig(f'{logdir}/{file_name}', format='pdf', bbox_inches='tight',  dpi=100)
+
+# plot the sum p_s_d_clean
+xlim = (0, 60)
+plt.figure(figsize=(15, 10))
+for idx, clean in enumerate(all_results[:, 3]):
+    plt.plot(clean, 'o', markersize=4, color=color[idx], label=f'Clean-{idx}')
+    plt.plot(clean, color=color[idx])
+# plt.plot(sum_of_signal_clean)
+plt.xlim(xlim)
+plt.xticks(np.arange(0, xlim[1]+1, 5))
+plt.grid()
+plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+plt.title(f'Clean PSD | PAD:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
+file_name = f'clean_psd_' +\
+            f'pad_{PADDING_MULTIPLIER}_' +\
+            f'xlim{xlim[0]}-{xlim[1]}.pdf'
+plt.savefig(f'{logdir}/{file_name}', format='pdf', bbox_inches='tight',  dpi=100)

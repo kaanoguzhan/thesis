@@ -39,11 +39,13 @@ def find_marker_laser_pulse(img, search_first_n_rows=120, x_axis_is_space=True):
     sum_y_axis = np.sum(img, axis=0)
 
     # Normalize sum_y_axis
-    sum_y_axis = sum_y_axis / np.max(sum_y_axis)
+    sum_y_axis_min = np.min(sum_y_axis)
+    sum_y_axis_max = np.max(sum_y_axis)
+    sum_y_axis = (sum_y_axis - sum_y_axis_min) / (sum_y_axis_max - sum_y_axis_min)
 
-    # start is the first time where the sum_y_axis is above 0.7
+    # Beam start is the first time where the sum_y_axis is above 0.7
     start = np.argmax(sum_y_axis > 0.70)
-    # end is the last time where the sum_y_axis is above 0.7
+    # Beam end is the last time where the sum_y_axis was above 0.7
     end = len(sum_y_axis) - np.argmax(np.flip(sum_y_axis) > 0.70)
 
     # # # Plot the sum_y_axis and start and end for debugging
@@ -73,4 +75,4 @@ def get_window_around_beam_center(img, window_size, x_axis_is_space=True):
     beam_center = find_beam_center(img)
     print(f'beam_center = {beam_center}')
     window_half_size = int(window_size/2)
-    return img[beam_center-window_half_size:beam_center+window_half_size, :]
+    return beam_center-window_half_size, beam_center+window_half_size
