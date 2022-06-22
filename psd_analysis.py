@@ -1,8 +1,8 @@
 # %% ─────────────────────────────────────────────────────────────────────────────
-# Imports, Constants, Settings
+#  Imports, Constants, Settings
 # ────────────────────────────────────────────────────────────────────────────────
 # ────────────────────────────────────────────────────────────
-# Imports
+#  Imports
 # ────────────────────────────────────────────────────────────
 import os
 from utils.general_utils import merge_pdfs, natural_sort
@@ -24,17 +24,16 @@ from utils.image_utils import split_image_with_stride
 
 
 # ─────────────────────────────────────────────────────────────
-# Default Constants
+#  Default Constants
 # ─────────────────────────────────────────────────────────────
-# TODO : Add "DEFAULT_" prefix to all constants
-DEFAULT_BEAM_WINDOW = 100
-DEFAULT_SPLIT_WINDOW_SIZE = 10
-DEFAULT_SPLIT_STRIDE = 10
-DEFAULT_PSD_CUTOFF = (3, 0.05)
-DEFAULT_PADDING_MULTIPLIER = 50
+BEAM_WINDOW = 100
+SPLIT_WINDOW_SIZE = 10
+SPLIT_STRIDE = 10
+PSD_CUTOFF = (3, 0.05)
+PADDING_MULTIPLIER = 50
 
 # ─────────────────────────────────────────────────────────────
-# Settings
+#  Settings
 # ─────────────────────────────────────────────────────────────
 
 print(f'Using Jupyter Notebook:{in_ipynb()}')
@@ -54,19 +53,19 @@ plt.rcParams.update({
 # Initilize arg parser
 parser = argparse.ArgumentParser(description='FFT denoise analysis')
 parser.add_help = True
-parser.add_argument('--beam_window', type=int, default=DEFAULT_BEAM_WINDOW, help='Beam Windows width around the beam center')
-parser.add_argument('--split_window_size', type=int, default=DEFAULT_SPLIT_WINDOW_SIZE, help='TODO')
-parser.add_argument('--split_stride', type=int, default=DEFAULT_SPLIT_STRIDE, help='TODO')
-parser.add_argument('--psd_cutoff', type=int, default=DEFAULT_PSD_CUTOFF, help='TODO')
-parser.add_argument('--padding_multiplier', type=int, default=DEFAULT_PADDING_MULTIPLIER, help='TODO')
+parser.add_argument('--beam_window', type=int, default=BEAM_WINDOW, help='Beam Windows width around the beam center')
+parser.add_argument('--split_window_size', type=int, default=SPLIT_WINDOW_SIZE, help='TODO')
+parser.add_argument('--split_stride', type=int, default=SPLIT_STRIDE, help='TODO')
+parser.add_argument('--psd_cutoff', type=int, default=PSD_CUTOFF, help='TODO')
+parser.add_argument('--padding_multiplier', type=int, default=PADDING_MULTIPLIER, help='TODO')
 args = parser.parse_args()
 
 # Set up log directory with timestamp and create file writer
 current_time = datetime.now().strftime("%Y.%m.%d")
 logdir = f'logs/{current_time}_AWAKE_PSD_Analysis' +\
     f'_window{args.beam_window:>03d}' +\
-    f'_split{DEFAULT_SPLIT_WINDOW_SIZE:>02d}' +\
-    f'_stride{DEFAULT_SPLIT_STRIDE:>02d}' +\
+    f'_split{SPLIT_WINDOW_SIZE:>02d}' +\
+    f'_stride{SPLIT_STRIDE:>02d}' +\
     f'_PSDCutoff{args.psd_cutoff[0]:>.2f}-{args.psd_cutoff[1]:>.4f}' +\
     f'_Padding{args.padding_multiplier:>02d}'
 file_writer_1 = SummaryWriter(f'{logdir}/tensorboard_logs')
@@ -76,8 +75,8 @@ print(f'\
 Parameters:\n\
 ----------------------------------------\n\
     Beam window: {args.beam_window}\n\
-    Split window size: {DEFAULT_SPLIT_WINDOW_SIZE}\n\
-    Split stride: {DEFAULT_SPLIT_STRIDE}\n\
+    Split window size: {SPLIT_WINDOW_SIZE}\n\
+    Split stride: {SPLIT_STRIDE}\n\
     PSD Cutoff: {args.psd_cutoff}\n\
     0-Padding: {args.padding_multiplier}\n\
     Log directory: {logdir}\n\
@@ -85,7 +84,7 @@ Parameters:\n\
 ')
 
 # %% ─────────────────────────────────────────────────────────────────────────────
-# Image loading and splitting into sub-images
+#  Image loading and splitting into sub-images
 # ────────────────────────────────────────────────────────────────────────────────
 
 # Load Image using AWAKE_DataLoader
@@ -121,7 +120,7 @@ plt.savefig(f'{logdir}/2_streak_img_after_mlp_cut_beam_window.pdf', format='pdf'
 tmp_beam_center = beam_center.copy()
 
 # Split image into sub-images with windows size of SPLIT_WINDOW_SIZE and stride of SPLIT_STRIDE
-img_splits = split_image_with_stride(image=tmp_beam_center, window_size=DEFAULT_SPLIT_WINDOW_SIZE, stride=DEFAULT_SPLIT_STRIDE)
+img_splits = split_image_with_stride(image=tmp_beam_center, window_size=SPLIT_WINDOW_SIZE, stride=SPLIT_STRIDE)
 
 # Concat all images in img_split on top of eachother, leave 5 pixel wide zeros between each image
 # Then plot it as a sanity check
@@ -134,7 +133,7 @@ plt.savefig(f'{logdir}/3_streak_img_after_mlp_cut_beam_window_split.pdf', format
 
 
 # %% ─────────────────────────────────────────────────────────────────────────────
-# Applying FFT filter and then doing the PSD analysis
+#  Applying FFT filter and then doing the PSD analysis
 # ────────────────────────────────────────────────────────────────────────────────
 
 def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,200)):
@@ -160,7 +159,7 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
     t_exp = np.arange(len(signal), dtype=np.int32)
 
     # ─────────────────────────────────────────────────────────────
-    # Use PSD to filter out noise
+    #  Use PSD to filter out noise
     # ─────────────────────────────────────────────────────────────
 
     # Compute Fourier Coefficients of the sample signal
@@ -307,7 +306,7 @@ for i in range(len(img_splits)):
     print(f'Processing image {i+1}/{len(img_splits)}')
     img_input = img_splits[i].copy()
 
-    fft_results = fft_filter_img(img_input.copy(), DEFAULT_PSD_CUTOFF, fft_bin_multiplier=DEFAULT_PADDING_MULTIPLIER)
+    fft_results = fft_filter_img(img_input.copy(), PSD_CUTOFF, fft_bin_multiplier=PADDING_MULTIPLIER)
     img, time_ticks, signal_org, signal_clean, freq_ticks, p_s_d, p_s_d_clean, fft_signal_plot = fft_results
 
     fft_signal_plot.savefig(f'{logdir}/denoise_psd_graphs_{i}.pdf', bbox_inches='tight')
@@ -382,7 +381,7 @@ plt.xlim(xlim)
 plt.xticks(np.arange(0, xlim[1]+1, 5))
 plt.grid()
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-plt.title(f'Clean signals | PAD:{DEFAULT_PADDING_MULTIPLIER} | PSD_CUTOFF:{DEFAULT_PSD_CUTOFF}')
+plt.title(f'Clean signals | PAD:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
 plt.savefig(f'{logdir}/5_all_clean_signals.pdf', format='pdf', bbox_inches='tight')
 
 # plot the sum p_s_d_clean
@@ -397,8 +396,55 @@ plt.xticks(np.arange(0, xlim[1]+1, 5))
 plt.ylim(0, 2)
 plt.grid()
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-plt.title(f'Clean PSD | Zero-Pad:{DEFAULT_PADDING_MULTIPLIER} | PSD_CUTOFF:{DEFAULT_PSD_CUTOFF}')
+plt.title(f'Clean PSD | Zero-Pad:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
 plt.savefig(f'{logdir}/5_all_clean_PSDs.pdf', format='pdf', bbox_inches='tight')
 
+# %% ─────────────────────────────────────────────────────────────────────────────
+#  Histogram plotting of signal peaks from the clean 
+# ────────────────────────────────────────────────────────────────────────────────
 
+all_results = np.array(all_results)
+
+p_s_d_clean = all_results[:, 3].copy()
+freq_ticks = all_results[:, 4].copy()
+
+# Project high-resolution PSD to low-resolution(integer) PSD
+psd_low_res = np.zeros(200)
+for idx, clean in enumerate(p_s_d_clean):
+    # replace nan with 0
+    clean[np.isnan(clean)] = 0
+    
+    # Find the peak
+    clean_max = np.argmax(clean)
+    print(f'Peak: Index: {clean_max}, Frequency: {freq_ticks[idx][clean_max]}')
+
+    # Make all values of p_s_d_clean 0 except the peak
+    clean[:] = 0
+    clean[clean_max] = 1
+
+    max_freq = freq_ticks[idx][clean_max]
+    psd_low_res[int(max_freq)] += 1
+
+# High Res Frequency Plot (Keeps all frequencies as floating numbers)
+# psd_sum = np.sum(p_s_d_clean, axis=0)
+# xlim = (0, 200)
+# plt.figure(figsize=(15, 10))
+# plt.bar(freq_ticks[0], psd_sum, color='red')
+# plt.xlim(xlim)
+# plt.xticks(np.arange(0, xlim[1]+1, 5))
+# plt.yticks(np.arange(0, np.max(psd_sum)+1, 1))
+# plt.grid()
+# plt.suptitle(f'Peak Histogram | BEAM_WINDOW:{BEAM_WINDOW} - SPLIT_SIZE: {SPLIT_WINDOW_SIZE} - STRIDE: {SPLIT_STRIDE}', fontsize=16)
+# plt.savefig(f'{logdir}/6_clean_psd_histogram_high_res.pdf', bbox_inches='tight')
+
+# Low Res Frequcy Plot (reduces all frequencies to integers)
+xlim = (0, 200)
+plt.figure(figsize=(15, 10))
+plt.bar(np.arange(len(psd_low_res)), psd_low_res, color='red')
+plt.xlim(xlim)
+plt.xticks(np.arange(0, xlim[1]+1, 5))
+plt.yticks(np.arange(0, np.max(psd_low_res)+1, 1))
+plt.grid()
+plt.suptitle(f'Peak Histogram | Samples:{len(all_results)} | BEAM_WINDOW:{BEAM_WINDOW} - SPLIT_SIZE: {SPLIT_WINDOW_SIZE} - STRIDE: {SPLIT_STRIDE}', fontsize=16)
+plt.savefig(f'{logdir}/6_clean_psd_histogram_low_res.pdf', bbox_inches='tight')
 
