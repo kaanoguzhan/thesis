@@ -22,7 +22,7 @@ from utils.awake_data_loader import AWAKE_DataLoader
 from utils.beam_utils import get_window_around_beam_center
 from utils.general_utils import merge_pdfs, natural_sort
 
-ENABLE_RUNNING_BY_JUPYTER_NOTEBOOK = False  # Set to True enable running from Jupyter Notebooks
+ENABLE_RUNNING_BY_JUPYTER_NOTEBOOK = True  # Set to True enable running from Jupyter Notebooks
 
 if ENABLE_RUNNING_BY_JUPYTER_NOTEBOOK:
     sys.argv = ['']
@@ -33,20 +33,10 @@ else:
 # Constants
 # ─────────────────────────────────────────────────────────────
 
-DEFAULT_BEAM_WINDOW = 10
-DEFAULT_NUM_PSD_STEPS = 70
+DEFAULT_BEAM_WINDOW = 20
+DEFAULT_NUM_PSD_STEPS = 4
 
 adl = AWAKE_DataLoader('awake_1', [512, 672])
-
-cur_data = adl.data[0]
-
-# Initilize arg parser
-parser = argparse.ArgumentParser(description='FFT denoise analysis')
-parser.add_help = True
-parser.add_argument('--beam_window', type=int, default=DEFAULT_BEAM_WINDOW, help='Beam Windows width around the beam center')
-parser.add_argument('--num_psd_steps', type=int, default=DEFAULT_NUM_PSD_STEPS, help='Number of PSD steps in np.logspace(-2, -6, args.num_psd_steps)')
-args = parser.parse_args()
-
 
 # ─────────────────────────────────────────────────────────────
 # Settings
@@ -60,11 +50,18 @@ plt.rcParams.update({
     'savefig.facecolor': 'w'
 })
 
+# Initilize arg parser
+parser = argparse.ArgumentParser(description='FFT denoise analysis')
+parser.add_help = True
+parser.add_argument('--beam_window', type=int, default=DEFAULT_BEAM_WINDOW, help='Beam Windows width around the beam center')
+parser.add_argument('--num_psd_steps', type=int, default=DEFAULT_NUM_PSD_STEPS, help='Number of PSD steps in np.logspace(-2, -6, args.num_psd_steps)')
+args = parser.parse_args()
 
 # Sets up log directory with timestamp
 logdir = "logs/" + datetime.now().strftime("%Y.%m.%d-%H_%M_%S") + f'_AWAKE_FFT_Denoising-window{args.beam_window}'
 # Creates a file writer for the log directory.
 file_writer = tf.summary.create_file_writer(logdir)
+
 
 print(f'\
     Parameters:\n\
@@ -194,8 +191,9 @@ def fft_filter_img(img, psd_cutoff, plot=False, return_plot=False):
     p_s_d = Fn * np.conj(Fn) / len(signal)
 
     # Normalize PSD
+    p_s_d_min = np.min(p_s_d)
     p_s_d_max = np.max(p_s_d)
-    p_s_d /= p_s_d_max
+    p_s_d = (p_s_d - p_s_d_min) / (p_s_d_max - p_s_d_min)
 
     # Find all frequencies with large power
     indices = p_s_d > psd_cutoff
@@ -302,6 +300,9 @@ def fft_filter_img(img, psd_cutoff, plot=False, return_plot=False):
 # %% ─────────────────────────────────────────────────────────────────────────────
 # Denoise the image using the FFT-PSD method
 # ────────────────────────────────────────────────────────────────────────────────
+
+cur_data = adl.data[0]
+
 cur_img = cur_data.streak_image[265:]
 
 cur_img = cur_img.T

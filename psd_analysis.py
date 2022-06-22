@@ -62,7 +62,7 @@ args = parser.parse_args()
 
 # Set up log directory with timestamp and create file writer
 current_time = datetime.now().strftime("%Y.%m.%d")
-logdir = f'logs/{current_time}_AWAKE_PSD_Analysis' +\
+logdir = f'logs/AWAKE_PSD_Peak_Analysis/{current_time}' +\
     f'_window{args.beam_window:>03d}' +\
     f'_split{SPLIT_WINDOW_SIZE:>02d}' +\
     f'_stride{SPLIT_STRIDE:>02d}' +\
@@ -382,7 +382,7 @@ plt.xticks(np.arange(0, xlim[1]+1, 5))
 plt.grid()
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 plt.title(f'Clean signals | PAD:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
-plt.savefig(f'{logdir}/5_all_clean_signals.pdf', format='pdf', bbox_inches='tight')
+plt.savefig(f'{logdir}/5_clean_signals_combined.pdf', format='pdf', bbox_inches='tight')
 
 # plot the sum p_s_d_clean
 xlim = (0, 200)
@@ -397,7 +397,7 @@ plt.ylim(0, 2)
 plt.grid()
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 plt.title(f'Clean PSD | Zero-Pad:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
-plt.savefig(f'{logdir}/5_all_clean_PSDs.pdf', format='pdf', bbox_inches='tight')
+plt.savefig(f'{logdir}/5_clean_PSDs_combined.pdf', format='pdf', bbox_inches='tight')
 
 # %% ─────────────────────────────────────────────────────────────────────────────
 #  Histogram plotting of signal peaks from the clean 
@@ -416,7 +416,7 @@ for idx, clean in enumerate(p_s_d_clean):
     
     # Find the peak
     clean_max = np.argmax(clean)
-    print(f'Peak: Index: {clean_max}, Frequency: {freq_ticks[idx][clean_max]}')
+    print(f'Image-{idx:>02} Peak Frequency: {freq_ticks[idx][clean_max]:.2f}')
 
     # Make all values of p_s_d_clean 0 except the peak
     clean[:] = 0
