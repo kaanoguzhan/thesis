@@ -448,3 +448,25 @@ plt.grid()
 plt.suptitle(f'Peak Histogram | Samples:{len(all_results)} | BEAM_WINDOW:{BEAM_WINDOW} - SPLIT_SIZE: {SPLIT_WINDOW_SIZE} - STRIDE: {SPLIT_STRIDE}', fontsize=16)
 plt.savefig(f'{logdir}/6_clean_psd_histogram_low_res.pdf', bbox_inches='tight')
 
+# %% ─────────────────────────────────────────────────────────────────────────────
+#  Mark sub images that have a frequency peak between 85 and 100
+# ────────────────────────────────────────────────────────────────────────────────
+# Concat all images in img_split on top of eachother, leave 5 pixel wide zeros between each image
+split_height = img_splits[0].shape[0]
+img_cat = np.zeros(((split_height+5) * len(img_splits) + 5, img_splits[0].shape[1]))
+for idx, img_split in enumerate(img_splits):
+    img_cat[idx*(split_height)+(idx)*5+5:(idx+1)*(split_height)+(idx)*5+5, :] = img_split
+
+# Get indexes of psd_peaks where the frequency is between 85 - 100
+peak_index_between = np.where((psd_peaks > 85) & (psd_peaks < 100))[0]
+peak_index_not_between = np.where((psd_peaks < 85) | (psd_peaks > 100))[0]
+for idx in peak_index_between:
+    img_cat[idx*(split_height)+(idx)*5+3:(idx)*(split_height)+(idx)*5+5, :] = 4000
+    img_cat[(idx+1)*(split_height)+(idx)*5+5:(idx+1)*(split_height)+(idx)*5+7, :] = 4000
+for idx in peak_index_not_between:
+    img_cat[idx*(split_height)+(idx)*5+3:(idx)*(split_height)+(idx)*5+5, :] = 2000
+    img_cat[(idx+1)*(split_height)+(idx)*5+5:(idx+1)*(split_height)+(idx)*5+7, :] = 2000
+plt.figure(figsize=(15, 10))
+plt.imshow(img_cat, vmax=5000, interpolation='none')
+plt.savefig(f'{logdir}/7_marked_splits.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
+
