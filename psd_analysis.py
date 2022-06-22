@@ -4,9 +4,9 @@
 # ────────────────────────────────────────────────────────────
 #  Imports
 # ────────────────────────────────────────────────────────────
-import os
-from utils.general_utils import merge_pdfs, natural_sort
 import argparse
+import json
+import os
 import sys
 import warnings
 from datetime import datetime
@@ -19,16 +19,15 @@ from torch.utils.tensorboard import SummaryWriter
 from utils.awake_data_loader import AWAKE_DataLoader
 from utils.beam_utils import (find_marker_laser_pulse,
                               get_window_around_beam_center)
-from utils.general_utils import in_ipynb
+from utils.general_utils import in_ipynb, merge_pdfs, natural_sort
 from utils.image_utils import split_image_with_stride
-
 
 # ─────────────────────────────────────────────────────────────
 #  Default Constants
 # ─────────────────────────────────────────────────────────────
 BEAM_WINDOW = 100
-SPLIT_WINDOW_SIZE = 10
-SPLIT_STRIDE = 10
+SPLIT_WINDOW_SIZE = 20
+SPLIT_STRIDE = 20
 PSD_CUTOFF = (3, 0.05)
 PADDING_MULTIPLIER = 50
 
@@ -47,7 +46,8 @@ warnings.filterwarnings("ignore")
 plt.rcParams.update({
     'figure.figsize': [15, 10],
     'savefig.transparent': False,
-    'savefig.facecolor': 'w'
+    'savefig.facecolor': 'w',
+    'image.interpolation': 'none',
 })
 
 # Initilize arg parser
@@ -63,11 +63,11 @@ args = parser.parse_args()
 # Set up log directory with timestamp and create file writer
 current_time = datetime.now().strftime("%Y.%m.%d")
 logdir = f'logs/AWAKE_PSD_Peak_Analysis/{current_time}' +\
-    f'_window{args.beam_window:>03d}' +\
-    f'_split{SPLIT_WINDOW_SIZE:>02d}' +\
-    f'_stride{SPLIT_STRIDE:>02d}' +\
-    f'_PSDCutoff{args.psd_cutoff[0]:>.2f}-{args.psd_cutoff[1]:>.4f}' +\
-    f'_Padding{args.padding_multiplier:>02d}'
+    f'_beamwin{args.beam_window:>03d}' +\
+    f'_splitwin{args.split_window_size:>02d}' +\
+    f'_stride{args.split_stride:>02d}' +\
+    f'_psdcut{args.psd_cutoff[0]:>.2f}-{args.psd_cutoff[1]:>.4f}' +\
+    f'_pad{args.padding_multiplier:>02d}'
 file_writer_1 = SummaryWriter(f'{logdir}/tensorboard_logs')
 
 
@@ -75,8 +75,8 @@ print(f'\
 Parameters:\n\
 ----------------------------------------\n\
     Beam window: {args.beam_window}\n\
-    Split window size: {SPLIT_WINDOW_SIZE}\n\
-    Split stride: {SPLIT_STRIDE}\n\
+    Split window size: {args.split_window_size}\n\
+    Split stride: {args.split_stride}\n\
     PSD Cutoff: {args.psd_cutoff}\n\
     0-Padding: {args.padding_multiplier}\n\
     Log directory: {logdir}\n\
@@ -119,8 +119,8 @@ plt.savefig(f'{logdir}/2_streak_img_after_mlp_cut_beam_window.pdf', format='pdf'
 
 tmp_beam_center = beam_center.copy()
 
-# Split image into sub-images with windows size of SPLIT_WINDOW_SIZE and stride of SPLIT_STRIDE
-img_splits = split_image_with_stride(image=tmp_beam_center, window_size=SPLIT_WINDOW_SIZE, stride=SPLIT_STRIDE)
+# Split image into sub-images with windows size of args.split_window_size and stride of args.split_stride
+img_splits = split_image_with_stride(image=tmp_beam_center, window_size=args.split_window_size, stride=args.split_stride)
 
 # Concat all images in img_split on top of eachother, leave 5 pixel wide zeros between each image
 # Then plot it as a sanity check
@@ -136,14 +136,15 @@ plt.savefig(f'{logdir}/3_streak_img_after_mlp_cut_beam_window_split.pdf', format
 #  Applying FFT filter and then doing the PSD analysis
 # ────────────────────────────────────────────────────────────────────────────────
 
-def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,200)):
+def fft_filter_img(image, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15, 200)):
     """
     Returns a fft filtered image.
     """
     dt_ps = 210 / 512  # Picoseconds (total time window:210 ps over 512 pixels)
-    dt_fs = dt_ps * 1000 # Femtoseconds, this is to keep the precision of the frequency later on
+    dt_fs = dt_ps * 1000  # Femtoseconds, this is to keep the precision of the frequency later on
 
     # Save image shape and row by sum on the first dimension
+    img = image.copy()
     img_shape = img.shape
     signal = np.sum(img, axis=0)
     signal_org = signal.copy()
@@ -153,7 +154,7 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
     signal_max = np.max(signal)
     signal_min = np.min(signal)
     signal = (signal - signal_min) / (signal_max - signal_min)
-    
+
     signal = signal - np.mean(signal)  # detrend signal
 
     t_exp = np.arange(len(signal), dtype=np.int32)
@@ -196,9 +197,9 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
 
     signal_clean = np.sum(img, axis=0)
 
-    ghz_freqs = np.power(dt_fs, -1) * 1000 * 1000 # dt_fs^-1 *1000*1000 = PetaHz *1000*1000 => GigaHz 
+    ghz_freqs = np.power(dt_fs, -1) * 1000 * 1000  # dt_fs^-1 *1000*1000 = PetaHz *1000*1000 => GigaHz
     freq_ticks = np.fft.fftfreq(len(signal)*fft_bin_multiplier) * ghz_freqs
-    
+
     frequency_range_start = np.where(freq_ticks > psd_frequency_range[0])[0][0]
     frequency_range_end = np.where(freq_ticks > psd_frequency_range[1])[0][0]
 
@@ -224,8 +225,8 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
     # Calculate Time and Frequency Ticks
     time_ticks = np.arange(0, t_exp[-1], 1) * dt_fs
     time_ticks = [int(i) for i in time_ticks]  # in Femtoseconds
-    
-    ghz_freqs = np.power(dt_fs, -1) * 1000 * 1000 # dt_fs^-1 *1000*1000 = PetaHz *1000*1000 => GigaHz
+
+    ghz_freqs = np.power(dt_fs, -1) * 1000 * 1000  # dt_fs^-1 *1000*1000 = PetaHz *1000*1000 => GigaHz
     freq_ticks = np.fft.fftfreq(len(signal)*fft_bin_multiplier) * ghz_freqs
 
     # Plotting denoising results
@@ -245,7 +246,7 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
     plt.grid()
     plt.legend()
 
-    plt.sca(axs[1])        
+    plt.sca(axs[1])
     plt.plot(freq_ticks, p_s_d, color='b')
     plt.plot(freq_ticks, p_s_d, 'o', color='b', linewidth=2, label='Noisy signal')
     plt.plot([psd_frequency_range[0], psd_frequency_range[-1]], [psd_cutoff_min, psd_cutoff_min], '--', color='tab:orange', label='PSD cutoff')
@@ -306,18 +307,18 @@ for i in range(len(img_splits)):
     print(f'Processing image {i+1}/{len(img_splits)}')
     img_input = img_splits[i].copy()
 
-    fft_results = fft_filter_img(img_input.copy(), PSD_CUTOFF, fft_bin_multiplier=PADDING_MULTIPLIER)
+    fft_results = fft_filter_img(img_input, args.psd_cutoff, fft_bin_multiplier=args.padding_multiplier)
     img, time_ticks, signal_org, signal_clean, freq_ticks, p_s_d, p_s_d_clean, fft_signal_plot = fft_results
 
     fft_signal_plot.savefig(f'{logdir}/denoise_psd_graphs_{i}.pdf', bbox_inches='tight')
 
     all_results.append([
-        np.array(signal_org), 
+        np.array(signal_org),
         np.array(signal_clean),
         np.array(p_s_d),
         np.array(p_s_d_clean),
         np.array(freq_ticks)
-    ])    
+    ])
 
     # TODO saving results to tensorboard
     # for j in range(len(time_ticks)):
@@ -381,7 +382,7 @@ plt.xlim(xlim)
 plt.xticks(np.arange(0, xlim[1]+1, 5))
 plt.grid()
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-plt.title(f'Clean signals | PAD:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
+plt.title(f'Clean signals | PAD:{args.padding_multiplier} | PSD_CUTOFF:{args.psd_cutoff}')
 plt.savefig(f'{logdir}/5_clean_signals_combined.pdf', format='pdf', bbox_inches='tight')
 
 # plot the sum p_s_d_clean
@@ -396,11 +397,11 @@ plt.xticks(np.arange(0, xlim[1]+1, 5))
 plt.ylim(0, 2)
 plt.grid()
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-plt.title(f'Clean PSD | Zero-Pad:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
+plt.title(f'Clean PSD | Zero-Pad:{args.padding_multiplier} | PSD_CUTOFF:{args.psd_cutoff}')
 plt.savefig(f'{logdir}/5_clean_PSDs_combined.pdf', format='pdf', bbox_inches='tight')
 
 # %% ─────────────────────────────────────────────────────────────────────────────
-#  Histogram plotting of signal peaks from the clean 
+#  Histogram plotting of signal peaks from the clean
 # ────────────────────────────────────────────────────────────────────────────────
 
 all_results = np.array(all_results)
@@ -410,10 +411,11 @@ freq_ticks = all_results[:, 4].copy()
 
 # Project high-resolution PSD to low-resolution(integer) PSD
 psd_low_res = np.zeros(200)
+psd_peaks = np.array([])
 for idx, clean in enumerate(p_s_d_clean):
     # replace nan with 0
     clean[np.isnan(clean)] = 0
-    
+
     # Find the peak
     clean_max = np.argmax(clean)
     print(f'Image-{idx:>02} Peak Frequency: {freq_ticks[idx][clean_max]:.2f}')
@@ -423,6 +425,7 @@ for idx, clean in enumerate(p_s_d_clean):
     clean[clean_max] = 1
 
     max_freq = freq_ticks[idx][clean_max]
+    psd_peaks = np.append(psd_peaks, max_freq)
     psd_low_res[int(max_freq)] += 1
 
 # High Res Frequency Plot (Keeps all frequencies as floating numbers)
@@ -445,7 +448,7 @@ plt.xlim(xlim)
 plt.xticks(np.arange(0, xlim[1]+1, 5))
 plt.yticks(np.arange(0, np.max(psd_low_res)+1, 1))
 plt.grid()
-plt.suptitle(f'Peak Histogram | Samples:{len(all_results)} | BEAM_WINDOW:{BEAM_WINDOW} - SPLIT_SIZE: {SPLIT_WINDOW_SIZE} - STRIDE: {SPLIT_STRIDE}', fontsize=16)
+plt.suptitle(f'Peak Histogram | Samples:{len(all_results)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}', fontsize=16)
 plt.savefig(f'{logdir}/6_clean_psd_histogram_low_res.pdf', bbox_inches='tight')
 
 # %% ─────────────────────────────────────────────────────────────────────────────
