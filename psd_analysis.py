@@ -470,3 +470,43 @@ plt.figure(figsize=(15, 10))
 plt.imshow(img_cat, vmax=5000, interpolation='none')
 plt.savefig(f'{logdir}/7_marked_splits.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
 
+# %% ─────────────────────────────────────────────────────────────────────────────
+#  Calculating Mean & Variance of the peaks
+# ────────────────────────────────────────────────────────────────────────────────
+psd_peaks_between = psd_peaks[peak_index_between]
+
+# Calculate mean and std of the peaks and variance
+mean_peak = np.mean(psd_peaks_between)
+var_peak = np.var(psd_peaks_between)
+
+print(f'Mean Peak: {mean_peak:.2f} | Var Peak: {var_peak:.4f}')
+
+
+# Sanity check
+# Merge all image splits that have a frequency peak between 85 and 100
+img_cat = img_splits[peak_index_between]
+# Merge img_cat on first axis
+img_cat = np.concatenate(img_cat, axis=0)
+
+# Apply the same mask to the clean psd
+a = fft_filter_img(img_cat, args.psd_cutoff, fft_bin_multiplier=args.padding_multiplier)
+_, _, _, _, freq_ticks, p_s_d, _, _ = a
+# Find the peak
+p_s_d[np.isnan(p_s_d)] = 0
+idx = np.argmax(p_s_d)
+max_freq = freq_ticks[idx]
+print(f'Max Frequency: {max_freq:.2f}')
+
+# Sanity check
+assert np.abs(max_freq - mean_peak) < 1, 'Max Frequency diverges too much from the peak mean'
+
+result = {
+    'peak_between_85_100_ghz': {
+        'mean': mean_peak,
+        'var': var_peak
+    },
+    'combined_image_max_freq': max_freq
+}
+# Write results to file
+with open(f'{logdir}/7_clean_psd_histogram_stats.json', 'w') as f:
+    json.dump(result, f, indent=4)
