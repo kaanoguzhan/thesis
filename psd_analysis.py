@@ -357,7 +357,9 @@ for f in pdf_files:
         os.remove(f)
 
 
-# %%
+# %% ─────────────────────────────────────────────────────────────────────────────
+#  Plotting Clean signal and their PSD for each image into a single figure
+# ────────────────────────────────────────────────────────────────────────────────
 all_results = np.array(all_results)
 
 all_results.shape
@@ -365,37 +367,38 @@ all_results.shape
 sum_of_signal_clean = np.sum(all_results[:, 1], axis=0)
 sum_of_signal_clean.shape
 
+color = np.random.rand(10000, 3,)
+signal_clean = all_results[:, 1][0]
+t_exp = np.arange(len(signal_clean), dtype=np.int32)
+freq_ticks = all_results[:, 4][0]
 # plot the sum of the signal
 xlim = (0, 100)
 plt.figure(figsize=(15, 10))
-color = np.random.rand(10000, 3,)
 for idx, clean in enumerate(all_results[:, 1]):
-    plt.plot(clean, 'o', markersize=4, color=color[idx], label=f'Clean-{idx}')
-    plt.plot(clean, color=color[idx])
+    plt.plot(t_exp, clean, 'o', markersize=4, color=color[idx], label=f'Clean-{idx}')
+    plt.plot(t_exp, clean, color=color[idx])
 # plt.plot(sum_of_signal_clean)
 plt.xlim(xlim)
 plt.xticks(np.arange(0, xlim[1]+1, 5))
 plt.grid()
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-plt.title(f'Clean signals | PAD:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
-file_name = f'clean_signals_' +\
-            f'pad_{PADDING_MULTIPLIER}_' +\
-            f'xlim{xlim[0]}-{xlim[1]}.pdf'
-plt.savefig(f'{logdir}/{file_name}', format='pdf', bbox_inches='tight',  dpi=100)
+plt.title(f'Clean signals | PAD:{DEFAULT_PADDING_MULTIPLIER} | PSD_CUTOFF:{DEFAULT_PSD_CUTOFF}')
+plt.savefig(f'{logdir}/5_all_clean_signals.pdf', format='pdf', bbox_inches='tight')
 
 # plot the sum p_s_d_clean
-xlim = (0, 60)
+xlim = (0, 200)
 plt.figure(figsize=(15, 10))
 for idx, clean in enumerate(all_results[:, 3]):
-    plt.plot(clean, 'o', markersize=4, color=color[idx], label=f'Clean-{idx}')
-    plt.plot(clean, color=color[idx])
+    plt.plot(freq_ticks, clean, 'o', markersize=4, color=color[idx], label=f'Clean-{idx}')
+    plt.plot(freq_ticks, clean, color=color[idx])
 # plt.plot(sum_of_signal_clean)
 plt.xlim(xlim)
 plt.xticks(np.arange(0, xlim[1]+1, 5))
+plt.ylim(0, 2)
 plt.grid()
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-plt.title(f'Clean PSD | PAD:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
-file_name = f'clean_psd_' +\
-            f'pad_{PADDING_MULTIPLIER}_' +\
-            f'xlim{xlim[0]}-{xlim[1]}.pdf'
-plt.savefig(f'{logdir}/{file_name}', format='pdf', bbox_inches='tight',  dpi=100)
+plt.title(f'Clean PSD | Zero-Pad:{DEFAULT_PADDING_MULTIPLIER} | PSD_CUTOFF:{DEFAULT_PSD_CUTOFF}')
+plt.savefig(f'{logdir}/5_all_clean_PSDs.pdf', format='pdf', bbox_inches='tight')
+
+
+
