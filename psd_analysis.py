@@ -4,6 +4,8 @@
 # ────────────────────────────────────────────────────────────
 # Imports
 # ────────────────────────────────────────────────────────────
+import os
+from utils.general_utils import merge_pdfs, natural_sort
 import argparse
 import sys
 import warnings
@@ -334,29 +336,26 @@ for i in range(len(img_splits)):
     #                               },
     #                               global_step=freq_ticks[j])
 
+# %% ─────────────────────────────────────────────────────────────────────────────
+#  Merge denoise_psd_graphs_N.pdf files into single pdf
+# ────────────────────────────────────────────────────────────────────────────────
 
+# Read all PDF files under logs/ directory
+pdf_files = [f for f in os.listdir(logdir) if f.endswith('.pdf')]
+pdf_files = natural_sort(pdf_files)
+pdf_files = [os.path.join(logdir, f) for f in pdf_files]
 
-    fft_results = fft_filter_img(img_input, PSD_CUTOFF, fft_bin_multiplier=10, plot=True, return_plot=True)
+# Categorize PDF files
+denoise_psd_graphs = [f for f in pdf_files if 'denoise_psd_graphs_' in f]
 
-    img, signal_org, signal_clean, p_s_d, p_s_d_clean = fft_results
-    # plt.figure(figsize=(15, 10))
-    # plt.imshow(img, vmax=5000)
+# Merge PDF files
+merge_pdfs(denoise_psd_graphs, os.path.join(logdir, '4_denoise_psd_graphs.pdf'))
 
-    all_results.append([signal_org, signal_clean, p_s_d, p_s_d_clean])
+# Delete all residual PDF files after merging
+for f in pdf_files:
+    if 'denoise_psd_graphs_' in f:
+        os.remove(f)
 
-    for j in range(len(signal_org)):
-        file_writer_1.add_scalars(main_tag='Signal',
-                                  tag_scalar_dict={
-                                      f'Original{i}': signal_org[j],
-                                      f'Clean{i}': signal_clean[j],
-                                  },
-                                  global_step=j)
-        file_writer_1.add_scalars(main_tag='PSD',
-                                  tag_scalar_dict={
-                                      f'Original{i}': p_s_d[j],
-                                      f'Clean{i}': p_s_d_clean[j],
-                                  },
-                                  global_step=j)
 
 # %%
 all_results = np.array(all_results)
