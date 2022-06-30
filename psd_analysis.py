@@ -4,9 +4,10 @@
 # ────────────────────────────────────────────────────────────
 #  Imports
 # ────────────────────────────────────────────────────────────
-import os
-from utils.general_utils import merge_pdfs, natural_sort
 import argparse
+import copy
+import json
+import os
 import sys
 import warnings
 from datetime import datetime
@@ -19,9 +20,8 @@ from torch.utils.tensorboard import SummaryWriter
 from utils.awake_data_loader import AWAKE_DataLoader
 from utils.beam_utils import (find_marker_laser_pulse,
                               get_window_around_beam_center)
-from utils.general_utils import in_ipynb
+from utils.general_utils import in_ipynb, merge_pdfs, natural_sort
 from utils.image_utils import split_image_with_stride
-
 
 # ─────────────────────────────────────────────────────────────
 #  Default Constants
@@ -47,7 +47,8 @@ warnings.filterwarnings("ignore")
 plt.rcParams.update({
     'figure.figsize': [15, 10],
     'savefig.transparent': False,
-    'savefig.facecolor': 'w'
+    'savefig.facecolor': 'w',
+    'image.interpolation': 'none',
 })
 
 # Initilize arg parser
@@ -63,11 +64,11 @@ args = parser.parse_args()
 # Set up log directory with timestamp and create file writer
 current_time = datetime.now().strftime("%Y.%m.%d")
 logdir = f'logs/AWAKE_PSD_Peak_Analysis/{current_time}' +\
-    f'_window{args.beam_window:>03d}' +\
-    f'_split{SPLIT_WINDOW_SIZE:>02d}' +\
-    f'_stride{SPLIT_STRIDE:>02d}' +\
-    f'_PSDCutoff{args.psd_cutoff[0]:>.2f}-{args.psd_cutoff[1]:>.4f}' +\
-    f'_Padding{args.padding_multiplier:>02d}'
+    f'_beamwin{args.beam_window:>03d}' +\
+    f'_splitwin{args.split_window_size:>02d}' +\
+    f'_stride{args.split_stride:>02d}' +\
+    f'_psdcut{args.psd_cutoff[0]:>.2f}-{args.psd_cutoff[1]:>.4f}' +\
+    f'_pad{args.padding_multiplier:>02d}'
 file_writer_1 = SummaryWriter(f'{logdir}/tensorboard_logs')
 
 
@@ -75,8 +76,8 @@ print(f'\
 Parameters:\n\
 ----------------------------------------\n\
     Beam window: {args.beam_window}\n\
-    Split window size: {SPLIT_WINDOW_SIZE}\n\
-    Split stride: {SPLIT_STRIDE}\n\
+    Split window size: {args.split_window_size}\n\
+    Split stride: {args.split_stride}\n\
     PSD Cutoff: {args.psd_cutoff}\n\
     0-Padding: {args.padding_multiplier}\n\
     Log directory: {logdir}\n\
@@ -119,8 +120,8 @@ plt.savefig(f'{logdir}/2_streak_img_after_mlp_cut_beam_window.pdf', format='pdf'
 
 tmp_beam_center = beam_center.copy()
 
-# Split image into sub-images with windows size of SPLIT_WINDOW_SIZE and stride of SPLIT_STRIDE
-img_splits = split_image_with_stride(image=tmp_beam_center, window_size=SPLIT_WINDOW_SIZE, stride=SPLIT_STRIDE)
+# Split image into sub-images with windows size of args.split_window_size and stride of args.split_stride
+img_splits = split_image_with_stride(image=tmp_beam_center, window_size=args.split_window_size, stride=args.split_stride)
 
 # Concat all images in img_split on top of eachother, leave 5 pixel wide zeros between each image
 # Then plot it as a sanity check
@@ -136,14 +137,15 @@ plt.savefig(f'{logdir}/3_streak_img_after_mlp_cut_beam_window_split.pdf', format
 #  Applying FFT filter and then doing the PSD analysis
 # ────────────────────────────────────────────────────────────────────────────────
 
-def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,200)):
+def fft_filter_img(image, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15, 200)):
     """
     Returns a fft filtered image.
     """
     dt_ps = 210 / 512  # Picoseconds (total time window:210 ps over 512 pixels)
-    dt_fs = dt_ps * 1000 # Femtoseconds, this is to keep the precision of the frequency later on
+    dt_fs = dt_ps * 1000  # Femtoseconds, this is to keep the precision of the frequency later on
 
     # Save image shape and row by sum on the first dimension
+    img = image.copy()
     img_shape = img.shape
     signal = np.sum(img, axis=0)
     signal_org = signal.copy()
@@ -153,7 +155,7 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
     signal_max = np.max(signal)
     signal_min = np.min(signal)
     signal = (signal - signal_min) / (signal_max - signal_min)
-    
+
     signal = signal - np.mean(signal)  # detrend signal
 
     t_exp = np.arange(len(signal), dtype=np.int32)
@@ -167,6 +169,16 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
 
     # Compute Power Spectral Denisty
     p_s_d = (np.real(Fn)**2 + np.imag(Fn)**2) / len(signal)
+
+    # p_s_d_phase = np.arctan(np.imag(Fn) / np.real(Fn))
+    # p_s_d_phase = np.arctan2(np.imag(Fn), np.real(Fn)) * 180/np.pi
+    # p_s_d_phase = np.arctan2(np.imag(Fn), np.real(Fn))
+
+    X2=Fn.copy() 
+    threshold = np.max(np.abs(X2))/100
+    X2[np.abs(X2)<threshold] = 0
+    p_s_d_phase = np.arctan2(np.imag(X2), np.real(X2)) * 180/np.pi
+    # p_s_d_phase = np.angle(Fn) * 180/np.pi
 
     # # Normalize PSD
     # p_s_d_min = np.min(p_s_d)
@@ -196,17 +208,18 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
 
     signal_clean = np.sum(img, axis=0)
 
-    ghz_freqs = np.power(dt_fs, -1) * 1000 * 1000 # dt_fs^-1 *1000*1000 = PetaHz *1000*1000 => GigaHz 
+    ghz_freqs = np.power(dt_fs, -1) * 1000 * 1000  # dt_fs^-1 *1000*1000 = PetaHz *1000*1000 => GigaHz
     freq_ticks = np.fft.fftfreq(len(signal)*fft_bin_multiplier) * ghz_freqs
-    
-    frequency_range_start = np.where(freq_ticks > psd_frequency_range[0])[0][0]
-    frequency_range_end = np.where(freq_ticks > psd_frequency_range[1])[0][0]
 
     # Set all frequencies that are not in psd_frequency_range to None
+    frequency_range_start = np.where(freq_ticks > psd_frequency_range[0])[0][0]
+    frequency_range_end = np.where(freq_ticks > psd_frequency_range[1])[0][0]
     p_s_d[:frequency_range_start] = None
     p_s_d[frequency_range_end:] = None
     p_s_d_clean[:frequency_range_start] = None
     p_s_d_clean[frequency_range_end:] = None
+    p_s_d_phase[:frequency_range_start] = None
+    p_s_d_phase[frequency_range_end:] = None
 
     # fig, ax = plt.subplots()
     # ax.plot(freq_ticks, p_s_d)
@@ -224,12 +237,12 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
     # Calculate Time and Frequency Ticks
     time_ticks = np.arange(0, t_exp[-1], 1) * dt_fs
     time_ticks = [int(i) for i in time_ticks]  # in Femtoseconds
-    
-    ghz_freqs = np.power(dt_fs, -1) * 1000 * 1000 # dt_fs^-1 *1000*1000 = PetaHz *1000*1000 => GigaHz
+
+    ghz_freqs = np.power(dt_fs, -1) * 1000 * 1000  # dt_fs^-1 *1000*1000 = PetaHz *1000*1000 => GigaHz
     freq_ticks = np.fft.fftfreq(len(signal)*fft_bin_multiplier) * ghz_freqs
 
     # Plotting denoising results
-    fig, axs = plt.subplots(4, 1, figsize=(20, 22))
+    fig, axs = plt.subplots(5, 1, figsize=(20, 22))
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.subplots_adjust(hspace=0.2)
 
@@ -245,7 +258,7 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
     plt.grid()
     plt.legend()
 
-    plt.sca(axs[1])        
+    plt.sca(axs[1])
     plt.plot(freq_ticks, p_s_d, color='b')
     plt.plot(freq_ticks, p_s_d, 'o', color='b', linewidth=2, label='Noisy signal')
     plt.plot([psd_frequency_range[0], psd_frequency_range[-1]], [psd_cutoff_min, psd_cutoff_min], '--', color='tab:orange', label='PSD cutoff')
@@ -274,8 +287,20 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
     plt.ylabel('Power')
     plt.grid()
     plt.legend()
-
+    
     plt.sca(axs[3])
+    plt.plot(freq_ticks, p_s_d_phase, color='b')
+    plt.plot(freq_ticks, p_s_d_phase, 'o', color='b', linewidth=2, label='Phase')
+    plt.xticks(range(0, psd_frequency_range[-1]+10, 10))
+    plt.xlim(0, psd_frequency_range[-1])
+    # plt.ylim(0, 2)
+    plt.title(f'Phase')
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel('Phase')
+    plt.grid()
+    plt.legend()
+
+    plt.sca(axs[4])
     plt.plot(t_exp, signal_org, 'o', color='k', markersize=5, label='Noisy signal')
     plt.plot(t_exp, signal_clean, 'o', color='r', markersize=5, label='Filtered signal')
     plt.xlim(t_exp[0], t_exp[-1])
@@ -288,7 +313,7 @@ def fft_filter_img(img, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(15,
 
     fig.suptitle(f'Signal PSD Filtering with PSD cutoff ({psd_cutoff_min:0.4f},{psd_cutoff_max:0.4f})', fontsize=16)
 
-    return img, time_ticks, signal_org, signal_clean, freq_ticks, p_s_d, p_s_d_clean, plt
+    return img, time_ticks, signal_org, signal_clean, freq_ticks, p_s_d, p_s_d_clean, p_s_d_phase, plt
 
 
 def zero_pad_image(img, pad_size):
@@ -306,18 +331,20 @@ for i in range(len(img_splits)):
     print(f'Processing image {i+1}/{len(img_splits)}')
     img_input = img_splits[i].copy()
 
-    fft_results = fft_filter_img(img_input.copy(), PSD_CUTOFF, fft_bin_multiplier=PADDING_MULTIPLIER)
-    img, time_ticks, signal_org, signal_clean, freq_ticks, p_s_d, p_s_d_clean, fft_signal_plot = fft_results
+    fft_results = fft_filter_img(img_input, args.psd_cutoff, fft_bin_multiplier=args.padding_multiplier)
+    img, time_ticks, signal_org, signal_clean, freq_ticks, p_s_d, p_s_d_clean, p_s_d_phase, fft_signal_plot = fft_results
 
     fft_signal_plot.savefig(f'{logdir}/denoise_psd_graphs_{i}.pdf', bbox_inches='tight')
 
     all_results.append([
-        np.array(signal_org), 
+        np.array(time_ticks),
+        np.array(signal_org),
         np.array(signal_clean),
+        np.array(freq_ticks),
         np.array(p_s_d),
         np.array(p_s_d_clean),
-        np.array(freq_ticks)
-    ])    
+        np.array(p_s_d_phase)
+    ])
 
     # TODO saving results to tensorboard
     # for j in range(len(time_ticks)):
@@ -359,61 +386,62 @@ for f in pdf_files:
 # %% ─────────────────────────────────────────────────────────────────────────────
 #  Plotting Clean signal and their PSD for each image into a single figure
 # ────────────────────────────────────────────────────────────────────────────────
-all_results = np.array(all_results)
+all_results_copy = copy.deepcopy(all_results)
+all_results_copy = np.array(all_results_copy)
 
-all_results.shape
-
-sum_of_signal_clean = np.sum(all_results[:, 1], axis=0)
+sum_of_signal_clean = np.sum(all_results_copy[:, 2], axis=0)
 sum_of_signal_clean.shape
 
 color = np.random.rand(10000, 3,)
-signal_clean = all_results[:, 1][0]
+signal_clean = all_results_copy[:, 2][0]
 t_exp = np.arange(len(signal_clean), dtype=np.int32)
-freq_ticks = all_results[:, 4][0]
+freq_ticks = all_results_copy[:, 3][0]
+
 # plot the sum of the signal
 xlim = (0, 100)
 plt.figure(figsize=(15, 10))
-for idx, clean in enumerate(all_results[:, 1]):
+for idx, clean in enumerate(all_results_copy[:, 2]):
     plt.plot(t_exp, clean, 'o', markersize=4, color=color[idx], label=f'Clean-{idx}')
     plt.plot(t_exp, clean, color=color[idx])
-# plt.plot(sum_of_signal_clean)
 plt.xlim(xlim)
 plt.xticks(np.arange(0, xlim[1]+1, 5))
 plt.grid()
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-plt.title(f'Clean signals | PAD:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
+plt.title(f'Clean signals | PAD:{args.padding_multiplier} | PSD_CUTOFF:{args.psd_cutoff}')
 plt.savefig(f'{logdir}/5_clean_signals_combined.pdf', format='pdf', bbox_inches='tight')
 
 # plot the sum p_s_d_clean
 xlim = (0, 200)
 plt.figure(figsize=(15, 10))
-for idx, clean in enumerate(all_results[:, 3]):
+for idx, clean in enumerate(all_results_copy[:, 5]):
     plt.plot(freq_ticks, clean, 'o', markersize=4, color=color[idx], label=f'Clean-{idx}')
     plt.plot(freq_ticks, clean, color=color[idx])
-# plt.plot(sum_of_signal_clean)
 plt.xlim(xlim)
 plt.xticks(np.arange(0, xlim[1]+1, 5))
 plt.ylim(0, 2)
 plt.grid()
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-plt.title(f'Clean PSD | Zero-Pad:{PADDING_MULTIPLIER} | PSD_CUTOFF:{PSD_CUTOFF}')
+plt.title(f'Clean PSD | Zero-Pad:{args.padding_multiplier} | PSD_CUTOFF:{args.psd_cutoff}')
 plt.savefig(f'{logdir}/5_clean_PSDs_combined.pdf', format='pdf', bbox_inches='tight')
 
 # %% ─────────────────────────────────────────────────────────────────────────────
-#  Histogram plotting of signal peaks from the clean 
+#  Histogram plotting of signal peaks from the clean
 # ────────────────────────────────────────────────────────────────────────────────
+all_results_copy = copy.deepcopy(all_results)
+all_results_copy = np.array(all_results_copy)
 
-all_results = np.array(all_results)
-
-p_s_d_clean = all_results[:, 3].copy()
-freq_ticks = all_results[:, 4].copy()
+p_s_d_clean = all_results_copy[:, 5].copy()
+p_s_d_phase = all_results_copy[:, 6].copy()
+freq_ticks = all_results_copy[:, 3].copy()
 
 # Project high-resolution PSD to low-resolution(integer) PSD
 psd_low_res = np.zeros(200)
+psd_peak_freqs = np.array([])
+psd_peak_phases = np.array([])
 for idx, clean in enumerate(p_s_d_clean):
     # replace nan with 0
     clean[np.isnan(clean)] = 0
-    
+
     # Find the peak
     clean_max = np.argmax(clean)
     print(f'Image-{idx:>02} Peak Frequency: {freq_ticks[idx][clean_max]:.2f}')
@@ -422,8 +450,11 @@ for idx, clean in enumerate(p_s_d_clean):
     clean[:] = 0
     clean[clean_max] = 1
 
-    max_freq = freq_ticks[idx][clean_max]
-    psd_low_res[int(max_freq)] += 1
+    peak_freq = freq_ticks[idx][clean_max]
+    peak_phase = p_s_d_phase[idx][clean_max]
+    psd_peak_freqs = np.append(psd_peak_freqs, peak_freq)
+    psd_peak_phases = np.append(psd_peak_phases, peak_phase)
+    psd_low_res[int(peak_freq)] += 1
 
 # High Res Frequency Plot (Keeps all frequencies as floating numbers)
 # psd_sum = np.sum(p_s_d_clean, axis=0)
@@ -445,6 +476,77 @@ plt.xlim(xlim)
 plt.xticks(np.arange(0, xlim[1]+1, 5))
 plt.yticks(np.arange(0, np.max(psd_low_res)+1, 1))
 plt.grid()
-plt.suptitle(f'Peak Histogram | Samples:{len(all_results)} | BEAM_WINDOW:{BEAM_WINDOW} - SPLIT_SIZE: {SPLIT_WINDOW_SIZE} - STRIDE: {SPLIT_STRIDE}', fontsize=16)
+plt.suptitle(f'Peak Histogram | Samples:{len(all_results_copy)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}', fontsize=16)
 plt.savefig(f'{logdir}/6_clean_psd_histogram_low_res.pdf', bbox_inches='tight')
 
+# %% ─────────────────────────────────────────────────────────────────────────────
+#  Mark sub images that have a frequency peak between 85 and 100
+# ────────────────────────────────────────────────────────────────────────────────
+# Concat all images in img_split on top of eachother, leave 5 pixel wide zeros between each image
+split_height = img_splits[0].shape[0]
+img_cat = np.zeros(((split_height+5) * len(img_splits) + 5, img_splits[0].shape[1]))
+for idx, img_split in enumerate(img_splits):
+    img_cat[idx*(split_height)+(idx)*5+5:(idx+1)*(split_height)+(idx)*5+5, :] = img_split
+
+# Get indexes of psd_peaks where the frequency is between 85 - 100
+idx_peaks_between = np.where((psd_peak_freqs > 85) & (psd_peak_freqs < 100))[0]
+peak_index_not_between = np.where((psd_peak_freqs < 85) | (psd_peak_freqs > 100))[0]
+for idx in idx_peaks_between:
+    img_cat[idx*(split_height)+(idx)*5+3:(idx)*(split_height)+(idx)*5+5, :] = 4000
+    img_cat[(idx+1)*(split_height)+(idx)*5+5:(idx+1)*(split_height)+(idx)*5+7, :] = 4000
+for idx in peak_index_not_between:
+    img_cat[idx*(split_height)+(idx)*5+3:(idx)*(split_height)+(idx)*5+5, :] = 2000
+    img_cat[(idx+1)*(split_height)+(idx)*5+5:(idx+1)*(split_height)+(idx)*5+7, :] = 2000
+plt.figure(figsize=(15, 10))
+plt.imshow(img_cat, vmax=5000, interpolation='none')
+plt.savefig(f'{logdir}/7_marked_splits.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
+
+# %% ─────────────────────────────────────────────────────────────────────────────
+#  Calculating Mean & Variance of the peaks
+# ────────────────────────────────────────────────────────────────────────────────
+psd_peaks_between = psd_peak_freqs[idx_peaks_between]
+psd_phases_between = psd_peak_phases.copy()
+psd_phases_between = psd_phases_between[idx_peaks_between]
+
+# Calculate mean and std of the peaks and variance
+mean_peak = np.mean(psd_peaks_between)
+var_peak = np.var(psd_peaks_between)
+
+print(f'Mean Peak: {mean_peak:.2f} | Var Peak: {var_peak:.4f}')
+
+# Sanity check
+# Merge all image splits that have a frequency peak between 85 and 100
+img_cat = img_splits[idx_peaks_between]
+img_cat = np.concatenate(img_cat, axis=0)
+# Apply the fft_filter to the clean psd
+a = fft_filter_img(img_cat, args.psd_cutoff, fft_bin_multiplier=args.padding_multiplier)
+_, _, _, _, freq_ticks, p_s_d, _, _, _ = a
+# Find the peak
+p_s_d[np.isnan(p_s_d)] = 0
+idx_peak = np.argmax(p_s_d)
+max_freq = freq_ticks[idx_peak]
+print(f'Max Frequency: {max_freq:.2f}')
+assert np.abs(max_freq - mean_peak) < 1.5, 'Max Frequency diverges too much from the peak mean'
+
+# Write results to JSON file
+result = {
+    'peak_between_85_100_ghz': {
+        'mean': mean_peak,
+        'var': var_peak
+    },
+    'combined_image_max_freq': max_freq
+}
+with open(f'{logdir}/signal_peak_analysis.json', 'w') as f:
+    json.dump(result, f, indent=4)
+
+# Calcualte the phase of the signal at the peak frequency
+# Get the phase of the signal at the peak frequency
+phase_at_peak = np.abs(psd_phases_between)
+print(f'Phase at Peak: {phase_at_peak}')
+
+# plot the phase of the signal at the peak frequency as histogram
+plt.figure(figsize=(15, 10))
+plt.hist(phase_at_peak, bins=30)
+plt.grid()
+plt.suptitle(f'Phase at Frequency Peaks | Samples:{len(all_results_copy)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}', fontsize=16)
+plt.savefig(f'{logdir}/8_phase_at_peaks.pdf', bbox_inches='tight')
