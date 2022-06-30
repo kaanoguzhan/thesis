@@ -507,13 +507,13 @@ plt.savefig(f'{logdir}/7_marked_splits.pdf', format='pdf', bbox_inches='tight', 
 # %% ─────────────────────────────────────────────────────────────────────────────
 #  Calculating Mean & Variance of the peaks
 # ────────────────────────────────────────────────────────────────────────────────
-psd_peaks_between = psd_peak_freqs[idx_peaks_between]
-psd_phases_between = psd_peak_phases.copy()
-psd_phases_between = psd_phases_between[idx_peaks_between]
+psd_peak_freqs_between = psd_peak_freqs[idx_peaks_between]
+psd_peak_phases_between = psd_peak_phases.copy()
+psd_peak_phases_between = psd_peak_phases_between[idx_peaks_between]
 
 # Calculate mean and std of the peaks and variance
-mean_peak = np.mean(psd_peaks_between)
-var_peak = np.var(psd_peaks_between)
+mean_peak = np.mean(psd_peak_freqs_between)
+var_peak = np.var(psd_peak_freqs_between)
 
 print(f'Mean Peak: {mean_peak:.2f} | Var Peak: {var_peak:.4f}')
 
@@ -529,7 +529,8 @@ p_s_d[np.isnan(p_s_d)] = 0
 idx_peak = np.argmax(p_s_d)
 max_freq = freq_ticks[idx_peak]
 print(f'Max Frequency: {max_freq:.2f}')
-assert np.abs(max_freq - mean_peak) < 1.5, 'Max Frequency diverges too much from the peak mean'
+if np.abs(max_freq - mean_peak) < 1.5:
+    print('!!! Max Frequency diverges too much from the peak mean !!!')
 
 # Write results to JSON file
 result = {
@@ -544,7 +545,7 @@ with open(f'{logdir}/signal_peak_analysis.json', 'w') as f:
 
 # Calcualte the phase of the signal at the peak frequency
 # Get the phase of the signal at the peak frequency
-phase_at_peak = np.abs(psd_phases_between)
+phase_at_peak = np.abs(psd_peak_phases_between)
 print(f'Phase at Peak: {phase_at_peak}')
 
 # plot the phase of the signal at the peak frequency as histogram
@@ -559,16 +560,23 @@ plt.savefig(f'{logdir}/8_phase_at_peaks.pdf', bbox_inches='tight')
 #  Plot Freq Peak vs Beam window number
 # ────────────────────────────────────────────────────────────────────────────────
 
+# Split into between 85 and 100 and outside
 psd_peak_freqs_between = psd_peak_freqs[idx_peaks_between]
 psd_peak_freqs_outside = psd_peak_freqs[idx_peaks_outside]
 
+# make limited copies with max 120 Ghz for plotting
+psd_peak_freqs_between_lim = copy.deepcopy(psd_peak_freqs_between)
+psd_peak_freqs_outside_lim = copy.deepcopy(psd_peak_freqs_outside)
+psd_peak_freqs_between_lim[psd_peak_freqs_between_lim > 120] = 120
+psd_peak_freqs_outside_lim[psd_peak_freqs_outside_lim > 120] = 120
+
 plt.figure(figsize=(15, 10))
-plt.bar(idx_peaks_between, psd_peak_freqs_between, color='mediumseagreen', label='Peak Frequency Between 85 and 100 GHz')
-plt.bar(idx_peaks_outside, psd_peak_freqs_outside, color='tomato', label='Peak Frequency Outside 85 and 100 GHz')
-for i, v in zip(idx_peaks_between, psd_peak_freqs_between):
-    plt.text(i, v, f'{v:.2f}', ha='center', va='bottom')
-for i, v in zip(idx_peaks_outside, psd_peak_freqs_outside):
-    plt.text(i, v, f'{v:.2f}', ha='center', va='bottom')
+plt.plot(idx_peaks_between, psd_peak_freqs_between_lim, color='mediumseagreen', marker='o', markersize=10, label='Peak Frequency Between 85 and 100 GHz')
+plt.plot(idx_peaks_outside, psd_peak_freqs_outside_lim, 'o', color='tomato', markersize=10, label='Peak Frequency Outside 85 and 100 GHz')
+for x, y, t in zip(idx_peaks_between, psd_peak_freqs_between_lim, psd_peak_freqs_between):
+    plt.text(x, y, f'{t:.1f}', ha='center', va='bottom')
+for x, y, t in zip(idx_peaks_outside, psd_peak_freqs_outside_lim, psd_peak_freqs_outside):
+    plt.text(x, y, f'{t:.1f}', ha='center', va='bottom')
 if len(psd_peak_freqs) < 30:
     plt.xticks(range(len(psd_peak_freqs)))
 elif len(psd_peak_freqs) < 60:
@@ -590,17 +598,26 @@ plt.savefig(f'{logdir}/9_freq_at_peaks_vs_beam_window.pdf', bbox_inches='tight')
 #  Plot Phase at Frequency Peak vs Beam window number
 # ────────────────────────────────────────────────────────────────────────────────
 
+# Split into between 85 and 100 and outside
 psd_peak_phases_between = psd_peak_phases[idx_peaks_between]
 psd_peak_phases_outside = psd_peak_phases[idx_peaks_outside]
 
+# make limited copies with between -120, 120 Degree for plotting
+psd_peak_phases_between_lim = copy.deepcopy(psd_peak_phases_between)
+psd_peak_phases_outside_lim = copy.deepcopy(psd_peak_phases_outside)
+psd_peak_phases_between_lim[psd_peak_phases_between_lim > 120] = 120
+psd_peak_phases_outside_lim[psd_peak_phases_outside_lim > 120] = 120
+psd_peak_phases_between_lim[psd_peak_phases_between_lim < -120] = -120
+psd_peak_phases_outside_lim[psd_peak_phases_outside_lim < -120] = -120
+
 plt.figure(figsize=(15, 10))
-plt.bar(idx_peaks_between, psd_peak_phases_between, color='mediumseagreen', label='Phase at Frequency Peak Between 85 and 100 GHz')
-plt.bar(idx_peaks_outside, psd_peak_phases_outside, color='tomato', label='Phase at Frequency Peak Outside 85 and 100 GHz')
+plt.plot(idx_peaks_between, psd_peak_phases_between_lim, color='mediumseagreen', marker='o', markersize=10, label='Phase at Frequency Peak Between 85 and 100 GHz')
+plt.plot(idx_peaks_outside, psd_peak_phases_outside_lim, 'o', color='tomato', markersize=10, label='Phase at Frequency Peak Outside 85 and 100 GHz')
 # write value on top of each bar
-for i, v in zip(idx_peaks_between, psd_peak_phases_between):
-    plt.text(i, v, f'{v:.2f}', ha='center', va='bottom')
-for i, v in zip(idx_peaks_outside, psd_peak_phases_outside):
-    plt.text(i, v, f'{v:.2f}', ha='center', va='bottom')
+for x, y, t in zip(idx_peaks_between, psd_peak_phases_between_lim, psd_peak_phases_between):
+    plt.text(x, y, f'{t:.1f}', ha='center', va='bottom')
+for x, y, t in zip(idx_peaks_outside, psd_peak_phases_outside_lim, psd_peak_phases_outside):
+    plt.text(x, y, f'{t:.1f}', ha='center', va='bottom')
 if len(psd_peak_freqs) < 30:
     plt.xticks(range(len(psd_peak_freqs)))
 elif len(psd_peak_freqs) < 60:
@@ -622,15 +639,22 @@ plt.savefig(f'{logdir}/9_phase_at_peaks_vs_beam_window.pdf', bbox_inches='tight'
 #  Frequency vs Phase
 # ────────────────────────────────────────────────────────────────────────────────
 
-psd_peaks_between = psd_peak_freqs[idx_peaks_between]
-psd_phases_between = psd_peak_phases[idx_peaks_between]
+psd_peak_freqs_between = psd_peak_freqs[idx_peaks_between]
+psd_peak_phases_between = psd_peak_phases[idx_peaks_between]
+
+# make limited copies with between -120, 120 Degree for plotting
+psd_peak_freqs_between_lim = copy.deepcopy(psd_peak_freqs_between)
+psd_peak_phases_between_lim = copy.deepcopy(psd_peak_phases_between)
+psd_peak_freqs_between_lim[psd_peak_freqs_between_lim > 120] = 120
+psd_peak_phases_between_lim[psd_peak_phases_between_lim > 120] = 120
+psd_peak_phases_between_lim[psd_peak_phases_between_lim < -120] = -120
 
 # plot psd_peak_freqs in bar graph
 plt.figure(figsize=(15, 10))
-plt.bar(psd_peaks_between, psd_phases_between, color='mediumseagreen', label='Peak Frequency Between 85 and 100 GHz')
+plt.plot(psd_peak_freqs_between, psd_peak_phases_between, color='mediumseagreen', marker='o', markersize=10, label='Peak Frequency Between 85 and 100 GHz')
 # write value on top of each bar
-for i, v in enumerate(psd_peaks_between):
-    plt.text(v, psd_phases_between[i], f'{psd_phases_between[i]:.2f}', ha='center', va='bottom')
+for i, x, y, t in zip(range(len(psd_peak_freqs_between)), psd_peak_freqs_between, psd_peak_phases_between_lim, psd_peak_phases_between):
+    plt.text(x, y, f'Win{i}', ha='center', va='bottom')
 plt.ylim(-120, 120)
 plt.yticks(np.arange(-120, 121, 30))
 plt.xticks(np.arange(85, 101, 1))
