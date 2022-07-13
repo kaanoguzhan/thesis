@@ -4,10 +4,8 @@
 
 import glob
 from datetime import datetime
-from pathlib import Path
 
 import h5py
-import matplotlib.pyplot as plt
 import numpy as np
 
 # ────────────────────────────────────────────────────────────
@@ -25,37 +23,50 @@ class AWAKE_DataLoader:
         files = glob.glob(f'data/{experiment_name}/*.h5')
         for i in range(0, len(files)):
             f = files[i]
-            ds = AWAKE_Data(f, img_dims)
+            ds = AWAKE_Image_Data(f, img_dims)
             data.append(ds)
         return data
 
+    def get_data_at_index(self, index):
+        return self.data[index]
 
-class AWAKE_Data:
-    def __init__(self, data_path, img_dims):
-        self.data_path = data_path
-        self.data = self.load_data()
-        self.streak_image = self.get_streak_image(img_dims)
-        self.streak_stamp = self.get_streak_stamp()
-        self.timestamp = self.get_timestamp()
 
-    def load_data(self):
-        data = h5py.File(self.data_path, 'r')
+class AWAKE_Image_Data:
+    def __init__(self, data_path, img_dims=None):
+        self.__img_dims = img_dims
+        self.__data_path = data_path
+        self.__data = self.__load_data()
+
+    def __load_data(self):
+        data = h5py.File(self.__data_path, 'r')
         return data
 
+    def get_image(self):
+        if self.__img_dims is None:
+            raise ValueError('img_dims must be specified')
+        streak_image = (np.reshape(self.__data['AwakeEventData']['XMPP-STREAK']['StreakImage']['streakImageData'], self.__img_dims))
+        return streak_image
+
+    def get_time_values(self):
+        time_axis_length = self.__img_dims[0] - 1
+        return self.__data['AwakeEventData']['XMPP-STREAK']['StreakImage']['streakImageTimeValues'][:time_axis_length]
+
     def get_timestamp(self):
-        a = np.array(self.data['AwakeEventInfo']['timestamp'])
+        a = np.array(self.__data['AwakeEventInfo']['timestamp'])
         timestamp = a/1e9
         dt_object = datetime.fromtimestamp(timestamp)
         return dt_object
 
-    def get_streak_image(self, img_dims):
-        streak_image = (np.reshape(self.data['AwakeEventData/XMPP-STREAK/StreakImage/streakImageData'], img_dims))
-        return streak_image
+    def get_image_dims(self):
+        if self.__img_dims is None:
+            raise ValueError('img_dims have not been specified')
+        else:
+            return self.__img_dims
 
     def get_streak_stamp(self):
-        streak_stamp = (self.data['AwakeEventData']['TT43.BPM.430010']['Acquisition'].attrs['acqStamp'])/1e9
+        streak_stamp = (self.__data['AwakeEventData']['TT43.BPM.430010']['Acquisition'].attrs['acqStamp'])/1e9
         return streak_stamp
 
     def get_all_variables(self):
-        # TODO not really the intended use of this function
-        return list(self.data['AwakeEventData'])
+        # TODO not really the intended use of this class
+        return list(self.__data['AwakeEventData'])

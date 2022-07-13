@@ -23,7 +23,8 @@ def find_beam_center(img, x_axis_is_space=True):
 
 def find_marker_laser_pulse(img, search_first_n_rows=120, x_axis_is_space=True):
     """
-    Finds the laser pulse in the image.
+    Finds the laser pulse in the image with a very naive approach.
+    #TODO: This will be improved in the future.
     """
 
     # Swap axes if x_axis_is_space is False

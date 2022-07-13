@@ -5,6 +5,7 @@
 # Imports
 # ────────────────────────────────────────────────────────────
 import argparse
+import copy
 import io
 import os
 import sys
@@ -89,7 +90,7 @@ def fft_filter(signal, psd_cutoff, plot_steps=False):
     t_experiment = np.arange(len(signal))
 
     # Normalize signal between 0 and 1
-    signal_old = signal.copy()
+    signal_old = copy.deepcopy(signal)
     signal_max = np.max(signal)
     signal = signal / signal_max
 
@@ -175,7 +176,7 @@ def fft_filter_img(img, psd_cutoff, plot=False, return_plot=False):
     signal = np.sum(img, axis=0)
 
     # Normalize signal between 0 and 1
-    signal_old = signal.copy()
+    signal_old = copy.deepcopy(signal)
     signal_max = np.max(signal)
     signal = signal / signal_max
 
@@ -301,17 +302,15 @@ def fft_filter_img(img, psd_cutoff, plot=False, return_plot=False):
 # Denoise the image using the FFT-PSD method
 # ────────────────────────────────────────────────────────────────────────────────
 
-cur_data = adl.data[0]
+cur_data = adl.get_data_at_index(0)
 
 cur_img = cur_data.streak_image[265:]
 
 cur_img = cur_img.T
 
-temp_img = cur_img
+temp_img = copy.deepcopy(cur_img)
 
 temp_img = get_window_around_beam_centre(temp_img, args.beam_window)
-
-tif = temp_img.copy()
 
 for idx, psd_cutoff in enumerate(np.logspace(-2, -6, args.num_psd_steps)[::-1]):
     tif, filter_plot = fft_filter_img(img=temp_img.copy(), psd_cutoff=psd_cutoff, plot=True, return_plot=True)

@@ -1,6 +1,20 @@
 import re
-from PyPDF2 import PdfFileMerger
+
 from IPython import get_ipython
+from PyPDF2 import PdfFileMerger
+
+
+def in_ipynb():
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == 'ZMQInteractiveShell':
+            return True   # Jupyter notebook or qtconsole
+        elif shell == 'TerminalInteractiveShell':
+            return False  # Terminal running IPython
+        else:
+            return False  # Other type (?)
+    except NameError:
+        return False      # Probably standard Python interpreter
 
 
 def natural_sort(l, reverse=False):
@@ -21,16 +35,3 @@ def merge_pdfs(pdf_paths: list, output: str):
         merger.append(pdf)
     merger.write(output)
     merger.close()
-
-
-def in_ipynb():
-    try:
-        shell = get_ipython().__class__.__name__
-        if shell == 'ZMQInteractiveShell':
-            return True   # Jupyter notebook or qtconsole
-        elif shell == 'TerminalInteractiveShell':
-            return False  # Terminal running IPython
-        else:
-            return False  # Other type (?)
-    except NameError:
-        return False      # Probably standard Python interpreter

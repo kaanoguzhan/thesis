@@ -176,9 +176,9 @@ def fft_filter_img(image, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(1
     # p_s_d_phase = np.arctan2(np.imag(Fn), np.real(Fn)) * 180/np.pi
     # p_s_d_phase = np.arctan2(np.imag(Fn), np.real(Fn))
 
-    X2=Fn.copy() 
+    X2 = Fn.copy()
     threshold = np.max(np.abs(X2))/100
-    X2[np.abs(X2)<threshold] = 0
+    X2[np.abs(X2) < threshold] = 0
     p_s_d_phase = np.arctan2(np.imag(X2), np.real(X2)) * 180/np.pi
     # p_s_d_phase = np.angle(Fn) * 180/np.pi
 
@@ -289,7 +289,7 @@ def fft_filter_img(image, psd_cutoff, fft_bin_multiplier, psd_frequency_range=(1
     plt.ylabel('Power')
     plt.grid()
     plt.legend()
-    
+
     plt.sca(axs[3])
     plt.plot(freq_ticks, p_s_d_phase, color='b')
     plt.plot(freq_ticks, p_s_d_phase, 'o', color='b', linewidth=2, label='Phase')
@@ -552,7 +552,9 @@ print(f'Phase at Peak: {phase_at_peak}')
 plt.figure(figsize=(15, 10))
 plt.hist(phase_at_peak, bins=30)
 plt.grid()
-plt.suptitle(f'Phase at Frequency Peaks | Samples:{len(all_results_copy)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}', fontsize=16)
+plt.suptitle(
+    f'Phase at Frequency Peaks | Samples:{len(all_results_copy)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}',
+    fontsize=16)
 plt.savefig(f'{logdir}/8_phase_at_peaks.pdf', bbox_inches='tight')
 
 
@@ -589,7 +591,9 @@ plt.ylim(0, 120)
 plt.grid(axis='y')
 plt.xlabel('Beam Window Number')
 plt.ylabel('Frequency (GHz)')
-plt.suptitle(f'Frequency Peaks for each Beam Window | Samples:{len(all_results_copy)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}', fontsize=16)
+plt.suptitle(
+    f'Frequency Peaks for each Beam Window | Samples:{len(all_results_copy)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}',
+    fontsize=16)
 plt.legend()
 plt.savefig(f'{logdir}/9_freq_at_peaks_vs_beam_window.pdf', bbox_inches='tight')
 
@@ -630,7 +634,9 @@ plt.ylim(-120, 120)
 plt.grid(axis='y')
 plt.xlabel('Beam Window Number')
 plt.ylabel('Phase (deg)')
-plt.suptitle(f'Phase at Frequency Peaks for each Beam Window | Samples:{len(all_results_copy)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}', fontsize=16)
+plt.suptitle(
+    f'Phase at Frequency Peaks for each Beam Window | Samples:{len(all_results_copy)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}',
+    fontsize=16)
 plt.legend()
 plt.savefig(f'{logdir}/9_phase_at_peaks_vs_beam_window.pdf', bbox_inches='tight')
 
@@ -661,8 +667,8 @@ plt.xticks(np.arange(85, 101, 1))
 plt.grid()
 plt.xlabel('Frequency (GHz)')
 plt.ylabel('Phase (deg)')
-plt.suptitle(f'Frequency vs Phase at Frequency Peaks | Samples:{len(all_results_copy)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}', fontsize=16)
+plt.suptitle(
+    f'Frequency vs Phase at Frequency Peaks | Samples:{len(all_results_copy)} | BEAM_WINDOW:{args.beam_window} - SPLIT_SIZE: {args.split_window_size} - STRIDE: {args.split_stride}',
+    fontsize=16)
 plt.legend()
 plt.savefig(f'{logdir}/9_freq_at_peaks_vs_phase_at_peaks.pdf', bbox_inches='tight')
-
-
