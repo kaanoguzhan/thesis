@@ -1,3 +1,4 @@
 [submodule "logs"]
 	path = logs
 	url = git@github.com:kaanoguzhan/thesis_logs.git
+	ignore = dirty
