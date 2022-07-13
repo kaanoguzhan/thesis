@@ -19,7 +19,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from utils.awake_data_loader import AWAKE_DataLoader
 from utils.beam_utils import (find_marker_laser_pulse,
-                              get_window_around_beam_center)
+                              get_window_around_beam_centre)
 from utils.general_utils import in_ipynb, merge_pdfs, natural_sort
 from utils.image_utils import split_image_with_stride
 
@@ -92,7 +92,7 @@ Parameters:\n\
 
 # Load Image using AWAKE_DataLoader
 adl = AWAKE_DataLoader('awake_1', [512, 672])
-streak_img = adl.data[0].streak_image
+streak_img = adl.data[10].streak_image
 
 # plot streak_img as a sanity check
 plt.figure()
@@ -113,14 +113,14 @@ plt.imshow(streak_img, vmax=5000)
 plt.savefig(f'{logdir}/1_streak_img_after_mlp_cut.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
 
 # Cut a window around the beam center and polot it as a sanity check
-beam_window_start, beam_window_end = get_window_around_beam_center(streak_img, args.beam_window, x_axis_is_space=True)
+beam_window_start, beam_window_end = get_window_around_beam_centre(streak_img, args.beam_window, x_axis_is_space=True)
 # beam_center = streak_img[290:300, :]
 beam_center = streak_img[beam_window_start:beam_window_end, :]
 plt.figure(figsize=(15, 10))
 plt.imshow(beam_center, vmax=5000)
 plt.savefig(f'{logdir}/2_streak_img_after_mlp_cut_beam_window.pdf', format='pdf', bbox_inches='tight', pad_inches=0.1)
 
-tmp_beam_center = beam_center.copy()
+tmp_beam_center = copy.deepcopy(beam_center)
 
 # Split image into sub-images with windows size of args.split_window_size and stride of args.split_stride
 img_splits = split_image_with_stride(image=tmp_beam_center, window_size=args.split_window_size, stride=args.split_stride)
