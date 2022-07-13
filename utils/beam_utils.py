@@ -63,7 +63,7 @@ def find_marker_laser_pulse(img, search_first_n_rows=120, x_axis_is_space=True):
     return start, end
 
 
-def get_window_around_beam_center(img, window_size, x_axis_is_space=True):
+def get_window_around_beam_centre(img, window_size, x_axis_is_space=True):
     """
     Returns a window of the image centered on the beam center.
     """

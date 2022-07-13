@@ -19,7 +19,7 @@ from matplotlib.ticker import FormatStrFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from utils.awake_data_loader import AWAKE_DataLoader
-from utils.beam_utils import get_window_around_beam_center
+from utils.beam_utils import get_window_around_beam_centre
 from utils.general_utils import merge_pdfs, natural_sort
 
 ENABLE_RUNNING_BY_JUPYTER_NOTEBOOK = True  # Set to True enable running from Jupyter Notebooks
@@ -309,7 +309,7 @@ cur_img = cur_img.T
 
 temp_img = cur_img
 
-temp_img = get_window_around_beam_center(temp_img, args.beam_window)
+temp_img = get_window_around_beam_centre(temp_img, args.beam_window)
 
 tif = temp_img.copy()
 

@@ -1,6 +1,7 @@
 # Common ignore
 ignored/*
 *.pyc
+*lnk
 
 # ignore experiment data
 data/*
