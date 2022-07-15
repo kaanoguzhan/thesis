@@ -79,7 +79,7 @@ Parameters:\n\
 ')
 
 #  ─────────────────────────────────────────────────────────────────────────────
-#  Image loading and splitting into sub-images
+#  Linear Time Axis vs Experiment Timestamps comparison
 # ────────────────────────────────────────────────────────────────────────────────
 
 # Load Image using AWAKE_DataLoader
@@ -93,25 +93,35 @@ timeaxis = img_timevalues
 timeax_lin = np.linspace(timeaxis[0], timeaxis[-1], len(timeaxis))
 
 # Plot Time values
-fig, ax = plt.subplots(figsize=(25, 10))
+fig, axs = plt.subplots(figsize=(18, 12), nrows=2, ncols=1)
+# add space between plots
+plt.sca(axs[0])
 for i in range(adl.get_size()):
     target_image_data = adl.get_data_at_index(i)
     experiment_name = target_image_data.get_experiment_name()
-    print(f'Experiment: {experiment_name}')
     img_timevalues = target_image_data.get_time_values()
     plt.plot(img_timevalues, label=f'{experiment_name}')
 plt.plot(timeax_lin, color='black', label='Linear time')
+plt.xticks(np.arange(0, len(img_timevalues), 30))
+plt.title('Experiment Timestamps vs Linear Time')
+plt.xlabel('Pixel index')
+plt.ylabel('Timestamp (ps)')
 plt.grid()
 plt.legend()
-plt.xticks(np.arange(0, len(img_timevalues), 10))
-plt.title('Image Time Values')
-plt.tight_layout()
-plt.savefig(f'{logdir}/1-time_values_vs_linear_time.pdf')
 
-fig = plt.figure(figsize=(25, 10))
-plt.plot(timeax_lin - img_timevalues)
+plt.sca(axs[1])
+for i in range(adl.get_size()):
+    target_image_data = adl.get_data_at_index(i)
+    experiment_name = target_image_data.get_experiment_name()
+    img_timevalues = target_image_data.get_time_values()
+    plt.plot(img_timevalues - timeax_lin, label=f'{experiment_name}')
+plt.xticks(np.arange(0, len(img_timevalues), 30))
+plt.title('Difference: Linear Time - Experiment Timestamps')
 plt.grid()
-plt.savefig(f'{logdir}/2-difference_from_linear_time.pdf')
+plt.legend()
+
+plt.tight_layout()
+plt.savefig(f'{logdir}/1-Linear_Time_Axis_vs_Experiment_Timestamps.pdf')
 
 
 # %%
