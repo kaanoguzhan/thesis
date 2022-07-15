@@ -15,10 +15,9 @@ import numpy as np
 
 class AWAKE_DataLoader:
     def __init__(self, experiment_name, img_dims):
-        self.experiment_name = experiment_name
-        self.data = self.load_experiment_data(experiment_name, img_dims)
+        self.__data = self.__load_experiment_data(experiment_name, img_dims)
 
-    def load_experiment_data(self, experiment_name, img_dims):
+    def __load_experiment_data(self, experiment_name, img_dims):
         data = []
         files = glob.glob(f'data/{experiment_name}/*.h5')
         for i in range(0, len(files)):
@@ -28,7 +27,10 @@ class AWAKE_DataLoader:
         return data
 
     def get_data_at_index(self, index):
-        return self.data[index]
+        return self.__data[index]
+
+    def get_size(self):
+        return len(self.__data)
 
 
 class AWAKE_Image_Data:
@@ -48,8 +50,11 @@ class AWAKE_Image_Data:
         return streak_image
 
     def get_time_values(self):
-        time_axis_length = self.__img_dims[0] - 1
-        return self.__data['AwakeEventData']['XMPP-STREAK']['StreakImage']['streakImageTimeValues'][:time_axis_length]
+        time_axis_length = self.__img_dims[0]
+        time_values = self.__data['AwakeEventData']['XMPP-STREAK']['StreakImage']['streakImageTimeValues'][:time_axis_length]
+        # fix the non-reported last time value
+        time_values[-1] = time_values[-2] + (time_values[-2] - time_values[-3])
+        return time_values
 
     def get_timestamp(self):
         a = np.array(self.__data['AwakeEventInfo']['timestamp'])

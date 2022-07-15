@@ -92,7 +92,7 @@ Parameters:\n\
 
 # Load Image using AWAKE_DataLoader
 adl = AWAKE_DataLoader('awake_1', [512, 672])
-streak_img = adl.data[10].streak_image
+streak_img = adl.get_data_at_index(10).streak_image
 
 # plot streak_img as a sanity check
 plt.figure()
