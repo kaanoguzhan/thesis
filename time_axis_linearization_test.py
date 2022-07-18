@@ -124,79 +124,85 @@ plt.tight_layout()
 plt.savefig(f'{logdir}/1-Linear_Time_Axis_vs_Experiment_Timestamps.pdf')
 
 
-# %%
+# %% ─────────────────────────────────────────────────────────────────────────────
+#  1-D Interpolation demonstration
+# ────────────────────────────────────────────────────────────────────────────────
 
-x_value = np.array([0, 1, 2, 3, 4, 5])
-y_value = np.array([0, 1.1, 2.2, 3.5, 3.9, 5])
-y_lin = np.linspace(y_value[0], y_value[-1], len(y_value))
-# y_value = np.array([50, 3, 4, 20, 160])
+x_linear = np.array([0, 1, 2, 3, 4, 5])
+y_intensity = np.array([50, 3, 4, 25, 10, 30])
 
-f_linear = interpolate.interp1d(y_value, x_value)
-f_quad = interpolate.interp1d(y_value, x_value, kind="quadratic")
+x_distorted = np.array([0, 0.8, 1.7, 2.7, 3.8, 5])
 
-x_new = np.linspace(0, 5, 6)
-x_new = np.array([0, 1.1, 2.2, 3.5, 3.9, 5])
+f_linear = interpolate.interp1d(x_distorted, y_intensity)
 
-plt.scatter(x_value, y_value, color='blue', label='distorted')
-plt.scatter(x_value, y_lin, color='red', label='original')
-
-plt.plot(x_value, f_linear(x_new), color='black', markersize=7, marker='.', label='linear')
-# plt.plot(x_new, f_quad(x_new), 'o', color='green', markersize=3, label='quadratic')
-plt.xlabel("X-Values")
-plt.ylabel("Y-Values")
-plt.title("1d Interpolation using scipy interp1d method")
+fig = plt.figure(figsize=(13, 8))
+plt.plot(x_linear, x_linear, color='tomato', marker='.', markersize=12, label='Linear time')
+plt.plot(x_linear, x_distorted, color='mediumseagreen', marker='.', markersize=12, label='Distorted time')
+plt.xlabel('Linear time')
+plt.ylabel('Reported time')
 plt.legend()
-plt.show()
+plt.grid()
+plt.tight_layout()
+plt.savefig(f'{logdir}/2-1-Interpolation_toy_example_timeline.pdf')
 
 
-# %%
-def streakimdef_old(im_init, timeaxis):  # e.g. streakimdef(h5filename,'XMPP-STREAK' (or 'TT41.BTV.412350.STREAK'),[])
-    y = np.linspace(1, 672, 672)
-    timeax_lin = np.linspace(timeaxis[0], timeaxis[510]+(timeaxis[510]-timeaxis[509]), len(timeaxis))
-    # im_init_2d = np.rot90(np.reshape(im_init, (512, 672)))
-    im_init_2d = im_init.T
-    print(timeaxis.shape, y.size, im_init_2d.shape)
-    im_interpol = interpolate.interp2d(timeaxis, y, im_init_2d)
+fig = plt.figure(figsize=(13, 8))
+plt.plot(x_distorted, y_intensity, color='mediumseagreen', marker='.', markersize=12, label='Intensity on Distorted time')
+plt.scatter(x_linear, f_linear(x_linear), color='dodgerblue', s=100, label='Interpolated intensity')
+plt.xlabel("Timestamp")
+plt.ylabel("Pixel Intensity")
+plt.title("1D Interpolation toy example")
+plt.legend()
+plt.grid()
+plt.tight_layout()
+plt.savefig(f'{logdir}/2-2-Interpolation_toy_example.pdf')
+
+
+# %% ─────────────────────────────────────────────────────────────────────────────
+#  2-D Interpolation demonstration
+# ────────────────────────────────────────────────────────────────────────────────
+def streakimdef_old(img, timeaxis):
+    y = np.linspace(1, img.shape[1], img.shape[1])
+    timeax_lin = np.linspace(timeaxis[0], timeaxis[-1], len(timeaxis))
+    img_t = img.T
+    im_interpol = interpolate.interp2d(timeaxis, y, img_t)
     imstreak = im_interpol(timeax_lin, y)
-    return imstreak.T
+    imstreak_t = imstreak.T
+    return imstreak_t
 
 
-def streakimdef(im_init, timeaxis):  # e.g. streakimdef(h5filename,'XMPP-STREAK' (or 'TT41.BTV.412350.STREAK'),[])
-    y = np.linspace(1, 512, 512)
-    timeax_lin = np.linspace(timeaxis[0], timeaxis[510]+(timeaxis[510]-timeaxis[509]), len(timeaxis))
-    # im_init_2d = np.rot90(np.reshape(im_init, (512, 672)))
-    im_init = im_init.T
-    im_init[im_init > 5000] = 5000
-    
+def streakimdef(img, timeaxis):  # e.g. streakimdef(h5filename,'XMPP-STREAK' (or 'TT41.BTV.412350.STREAK'),[])
+    y = np.linspace(1, img.shape[1], img.shape[1])
+    timeax_lin = np.linspace(timeaxis[0], timeaxis[-1], len(timeaxis))
+    img = img.T
+    img[img > 5000] = 5000
+
     # Normalize im_init
-    im_init_max = np.max(im_init)
-    im_init_min = np.min(im_init)
-    im_init_norm = (im_init - im_init_min) / (im_init_max - im_init_min)
+    im_init_max = np.max(img)
+    im_init_min = np.min(img)
+    im_init_norm = (img - im_init_min) / (im_init_max - im_init_min)
 
     print(len(timeax_lin), len(timeax_lin))
     print(im_init_norm.shape)
 
-    # Normalize timeaxis
+    # Normalize both timeaxis
     timeaxis_norm = (timeaxis - timeaxis[0]) / (timeaxis[-1] - timeaxis[0])
-    # Normalize timeax_lin
     timeax_lin_norm = (timeax_lin - timeax_lin[0]) / (timeax_lin[-1] - timeax_lin[0])
-
-    f_linear = interpolate.interp1d(timeaxis_norm, timeax_lin_norm)
+    
+    f_linear = interpolate.interp1d(timeaxis_norm, im_init_norm)
 
     # for each row in im_init_2d, interpolate the timeaxis to the timeaxis_lin
     im_interpol = np.zeros_like(im_init_norm)
     for i in range(im_init_norm.shape[0]):
-        
+
         if i % 100 == 0:
             print(f'Interpolating row {i}')
-            
-        org_max = np.max(im_init[i])
-        org_min = np.min(im_init[i])
 
-        # print(f'{start} - {end}')
+        org_max = np.max(img[i])
+        org_min = np.min(img[i])
 
         # Scale all values between start and end range
-        im_interpol[i] = (im_init[i] - org_min) / (org_max - org_min)
+        im_interpol[i] = (img[i] - org_min) / (org_max - org_min)
 
         im_interpol[i] = f_linear(im_init_norm[i])
 
@@ -205,7 +211,6 @@ def streakimdef(im_init, timeaxis):  # e.g. streakimdef(h5filename,'XMPP-STREAK'
 
     # Reverse normalization of im_init_norm
     im_interpol = (im_interpol * (im_init_max - im_init_min)) + im_init_min
-
 
     imstreak = im_interpol.T
     return imstreak
