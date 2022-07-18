@@ -4,6 +4,7 @@
 # ────────────────────────────────────────────────────────────
 #  Imports
 # ────────────────────────────────────────────────────────────
+from cgi import test
 import scipy
 import argparse
 import copy
@@ -78,7 +79,7 @@ Parameters:\n\
 ----------------------------------------\n\
 ')
 
-#  ─────────────────────────────────────────────────────────────────────────────
+# %% ─────────────────────────────────────────────────────────────────────────────
 #  Linear Time Axis vs Experiment Timestamps comparison
 # ────────────────────────────────────────────────────────────────────────────────
 
@@ -135,6 +136,8 @@ x_distorted = np.array([0, 0.8, 1.7, 2.7, 3.8, 5])
 
 f_linear = interpolate.interp1d(x_distorted, y_intensity)
 
+y_interpolated = f_linear(x_linear)
+
 fig = plt.figure(figsize=(13, 8))
 plt.plot(x_linear, x_linear, color='tomato', marker='.', markersize=12, label='Linear time')
 plt.plot(x_linear, x_distorted, color='mediumseagreen', marker='.', markersize=12, label='Distorted time')
@@ -148,7 +151,7 @@ plt.savefig(f'{logdir}/2-1-Interpolation_toy_example_timeline.pdf')
 
 fig = plt.figure(figsize=(13, 8))
 plt.plot(x_distorted, y_intensity, color='mediumseagreen', marker='.', markersize=12, label='Intensity on Distorted time')
-plt.scatter(x_linear, f_linear(x_linear), color='dodgerblue', s=100, label='Interpolated intensity')
+plt.scatter(x_linear, y_interpolated, color='dodgerblue', s=100, label='Interpolated intensity')
 plt.xlabel("Timestamp")
 plt.ylabel("Pixel Intensity")
 plt.title("1D Interpolation toy example")
@@ -165,85 +168,246 @@ def streakimdef_old(img, timeaxis):
     y = np.linspace(1, img.shape[1], img.shape[1])
     timeax_lin = np.linspace(timeaxis[0], timeaxis[-1], len(timeaxis))
     img_t = img.T
+
     im_interpol = interpolate.interp2d(timeaxis, y, img_t)
+
     imstreak = im_interpol(timeax_lin, y)
+
     imstreak_t = imstreak.T
     return imstreak_t
 
 
-def streakimdef(img, timeaxis):  # e.g. streakimdef(h5filename,'XMPP-STREAK' (or 'TT41.BTV.412350.STREAK'),[])
-    y = np.linspace(1, img.shape[1], img.shape[1])
-    timeax_lin = np.linspace(timeaxis[0], timeaxis[-1], len(timeaxis))
-    img = img.T
-    img[img > 5000] = 5000
+def streakimdef(img, timeaxis):
+    x_linear = np.linspace(timeaxis[0], timeaxis[-1], len(timeaxis))
+    img_t = img.T
 
-    # Normalize im_init
-    im_init_max = np.max(img)
-    im_init_min = np.min(img)
-    im_init_norm = (img - im_init_min) / (im_init_max - im_init_min)
+    # for each row in img, interpolate the intensity values to linear time axis
+    im_interpol = np.zeros_like(img_t)
+    for i in range(img_t.shape[0]):
+        f_linear = interpolate.interp1d(timeaxis, img_t[i])
+        im_interpol[i] = f_linear(x_linear)
 
-    print(len(timeax_lin), len(timeax_lin))
-    print(im_init_norm.shape)
+    imstreak_t = im_interpol.T
+    return imstreak_t
 
-    # Normalize both timeaxis
-    timeaxis_norm = (timeaxis - timeaxis[0]) / (timeaxis[-1] - timeaxis[0])
-    timeax_lin_norm = (timeax_lin - timeax_lin[0]) / (timeax_lin[-1] - timeax_lin[0])
-    
-    f_linear = interpolate.interp1d(timeaxis_norm, im_init_norm)
-
-    # for each row in im_init_2d, interpolate the timeaxis to the timeaxis_lin
-    im_interpol = np.zeros_like(im_init_norm)
-    for i in range(im_init_norm.shape[0]):
-
-        if i % 100 == 0:
-            print(f'Interpolating row {i}')
-
-        org_max = np.max(img[i])
-        org_min = np.min(img[i])
-
-        # Scale all values between start and end range
-        im_interpol[i] = (img[i] - org_min) / (org_max - org_min)
-
-        im_interpol[i] = f_linear(im_init_norm[i])
-
-        # Reverse scaling to original range
-        im_interpol[i] = (im_interpol[i] * (org_max - org_min)) + org_min
-
-    # Reverse normalization of im_init_norm
-    im_interpol = (im_interpol * (im_init_max - im_init_min)) + im_init_min
-
-    imstreak = im_interpol.T
-    return imstreak
-
-
+# ────────────────────────────────────────────────────────────
+# Test - 1
 test_img = (np.ones((512, 672)).T * np.linspace(0, 5000, 512)).T
-# test_img = (np.ones((512, 672)) * np.linspace(0,5000,672))
-# test_img = adl.get_data_at_index(3).get_image()
-
 
 intp_img = copy.deepcopy(test_img)
-intp_img = streakimdef_old(intp_img, timeaxis)
+intp_img = streakimdef(intp_img, timeaxis)
 
 # Plot original image
 fig = plt.figure(figsize=(13, 13))
 plt.imshow(test_img, cmap='gray', vmin=0, vmax=5000)
 plt.colorbar(fraction=0.035, pad=0.04)
-
-# Plot the interpolated image
-fig = plt.figure(figsize=(13, 13))
-# plt.imshow(intp_img-test_img, cmap='coolwarm', vmin=-5e-12, vmax=5e-12)
-plt.imshow(intp_img-test_img, cmap='coolwarm')
-# plt.imshow(intp_img-test_img, cmap='coolwarm', vmin=-3000, vmax=3000)
-# plt.imshow(intp_img-test_img, cmap='coolwarm', vmin=-5000, vmax=5000)
-plt.colorbar(fraction=0.035, pad=0.04)
-plt.show()
+plt.title('Original Image - Test 1')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-1-1-Original_Image.pdf')
 
 # Plot the difference between the original and the interpolated image
 fig = plt.figure(figsize=(13, 13))
-# plt.imshow(intp_img-test_img, cmap='coolwarm', vmin=-3000, vmax=3000)
+plt.imshow(intp_img-test_img, cmap='coolwarm')
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title('Difference between original and interpolated image - Test 1')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-1-2-Difference_between_original_and_interpolated_image.pdf')
+
+# Plot the interpolated image
+fig = plt.figure(figsize=(13, 13))
 plt.imshow(intp_img, cmap='gray', vmax=5000)
 plt.colorbar(fraction=0.035, pad=0.04)
-# plt.imshow(intp_img-test_img, cmap='viridis', alpha=0.2)
-plt.show()
+plt.title('Interpolated Image - Test 1')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-1-3-Interpolated_Image.pdf')
 
-# %%
+# ────────────────────────────────────────────────────────────
+# Test - 2
+test_img = (np.ones((512, 672)) * np.linspace(0,5000,672))
+
+intp_img = copy.deepcopy(test_img)
+intp_img = streakimdef(intp_img, timeaxis)
+
+# Plot original image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(test_img, cmap='gray', vmin=0, vmax=5000)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title('Original Image - Test 2')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-2-1-Original_Image.pdf')
+
+# Plot the difference between the original and the interpolated image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(intp_img-test_img, cmap='coolwarm', vmin=-5e-12, vmax=5e-12)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title('Difference between original and interpolated image - Test 2')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-2-2-Difference_between_original_and_interpolated_image.pdf')
+
+# Plot the interpolated image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(intp_img, cmap='gray', vmax=5000)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title('Interpolated Image - Test 2')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-2-3-Interpolated_Image.pdf')
+
+# ────────────────────────────────────────────────────────────
+# Test - 3
+test_img = np.ones((512, 672))
+test_img[10] *= np.linspace(0,5000,672)
+test_img[11] *= np.linspace(0,5000,672)
+
+test_img[50,0:200] += 5000
+test_img[51,0:200] += 5000
+
+test_img[100,200:400] += 5000
+test_img[101,200:400] += 5000
+
+test_img[150,400:672] += 5000
+test_img[151,400:672] += 5000
+
+test_img[200,0:200] += 5000
+test_img[201,0:200] += 5000
+
+test_img[250,200:400] += 5000
+test_img[251,200:400] += 5000
+
+test_img[300,400:672] += 5000
+test_img[301,400:672] += 5000
+
+test_img[325] *= np.linspace(0,5000,672)
+test_img[326] *= np.linspace(0,5000,672)
+
+test_img[350,0:200] += 5000
+test_img[351,0:200] += 5000
+
+test_img[400,200:400] += 5000
+test_img[401,200:400] += 5000
+
+test_img[450,400:672] += 5000
+test_img[451,400:672] += 5000
+
+test_img[500,0:200] += 5000
+test_img[501,0:200] += 5000
+
+intp_img = copy.deepcopy(test_img)
+intp_img = streakimdef(intp_img, timeaxis)
+
+# Plot original image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(test_img, cmap='gray', vmin=0, vmax=5000)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title('Original Image - Test 2')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-3-1-Original_Image.pdf')
+
+# Plot the difference between the original and the interpolated image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(intp_img-test_img, cmap='coolwarm')
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title('Difference between original and interpolated image - Test 3')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-3-2-Difference_between_original_and_interpolated_image.pdf')
+
+# Plot the interpolated image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(intp_img, cmap='gray', vmax=5000)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title('Interpolated Image - Test 3')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-3-3-Interpolated_Image.pdf')
+
+# ────────────────────────────────────────────────────────────
+# Test - 4 - AWAKE Image
+test_img = adl.get_data_at_index(3).get_image()
+
+intp_img = copy.deepcopy(test_img)
+intp_img = streakimdef(intp_img, timeaxis)
+
+# Plot original image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(test_img, cmap='gray', vmin=0, vmax=5000)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title(f'Original Image - {adl.get_data_at_index(3).get_experiment_name()}')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-4-1-Original_Image.pdf')
+
+# Plot the difference between the original and the interpolated image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(intp_img-test_img, cmap='coolwarm', vmin=-5000, vmax=5000)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title(f'Difference between original and interpolated image - {adl.get_data_at_index(3).get_experiment_name()}')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-4-2-Difference_between_original_and_interpolated_image.pdf')
+
+# Plot the interpolated image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(intp_img, cmap='gray', vmin=0, vmax=5000)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title(f'Interpolated Image - {adl.get_data_at_index(3).get_experiment_name()}')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/3-4-3-Interpolated_Image.pdf')
+
+# ────────────────────────────────────────────────────────────
+#  AWAKE Image interpolation using SciPy interpolate.interp2d
+
+test_img = adl.get_data_at_index(3).get_image()
+
+intp_img = copy.deepcopy(test_img)
+intp_img = streakimdef_old(intp_img, timeaxis)
+
+
+# Plot original image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(test_img, cmap='gray', vmin=0, vmax=5000)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title(f'Original Image - {adl.get_data_at_index(3).get_experiment_name()} - Using SciPy interp2d')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/4-1-Original_Image.pdf')
+
+# Plot the difference between the original and the interpolated image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(intp_img-test_img, cmap='coolwarm', vmin=-5000, vmax=5000)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title(f'Difference between original and interpolated image - {adl.get_data_at_index(3).get_experiment_name()} - Using SciPy interp2d')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/4-2-Difference_between_original_and_interpolated_image.pdf')
+
+# Plot the interpolated image
+fig = plt.figure(figsize=(13, 13))
+plt.imshow(intp_img, cmap='gray', vmin=0, vmax=5000)
+plt.colorbar(fraction=0.035, pad=0.04)
+plt.title(f'Interpolated Image - {adl.get_data_at_index(3).get_experiment_name()} - Using SciPy interp2d')
+plt.xlabel('Space')
+plt.ylabel('Time')
+plt.tight_layout()
+plt.savefig(f'{logdir}/4-3-Interpolated_Image.pdf')
