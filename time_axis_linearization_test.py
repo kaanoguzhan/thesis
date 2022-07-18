@@ -4,27 +4,19 @@
 # ────────────────────────────────────────────────────────────
 #  Imports
 # ────────────────────────────────────────────────────────────
-from cgi import test
-import scipy
 import argparse
 import copy
-import json
-import os
 import sys
 import warnings
 from datetime import datetime
-from scipy import interpolate
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-from torch.utils.tensorboard import SummaryWriter
+from scipy import interpolate
 
 from utils.awake_data_loader import AWAKE_DataLoader
-from utils.beam_utils import (find_marker_laser_pulse,
-                              get_window_around_beam_centre)
-from utils.general_utils import in_ipynb, merge_pdfs, natural_sort
-from utils.image_utils import split_image_with_stride
+from utils.general_utils import in_ipynb
 
 # ─────────────────────────────────────────────────────────────
 #  Default Constants
@@ -69,7 +61,6 @@ args.psd_cutoff = tuple(args.psd_cutoff)
 # Set up log directory with timestamp and create file writer
 current_time = datetime.now().strftime("%Y.%m.%d")
 logdir = f'logs/Time_Axis_linearization/{current_time}'
-file_writer_1 = SummaryWriter(f'{logdir}/tensorboard_logs')
 
 
 print(f'\
@@ -87,7 +78,7 @@ Parameters:\n\
 adl = AWAKE_DataLoader('awake_1', [512, 672])
 target_image_data = adl.get_data_at_index(3)
 
-streak_img = target_image_data.get_image()
+streak_img = target_image_data.get_image(linearize_time_axis=False)
 img_timevalues = target_image_data.get_time_values()
 
 timeaxis = img_timevalues
@@ -165,16 +156,14 @@ plt.savefig(f'{logdir}/2-2-Interpolation_toy_example.pdf')
 #  2-D Interpolation demonstration
 # ────────────────────────────────────────────────────────────────────────────────
 def streakimdef_old(img, timeaxis):
-    y = np.linspace(1, img.shape[1], img.shape[1])
     timeax_lin = np.linspace(timeaxis[0], timeaxis[-1], len(timeaxis))
     img_t = img.T
 
-    im_interpol = interpolate.interp2d(timeaxis, y, img_t)
+    f_interpolate = interpolate.interp1d(timeaxis, img_t)
 
-    imstreak = im_interpol(timeax_lin, y)
+    imstreak = f_interpolate(timeax_lin)
 
-    imstreak_t = imstreak.T
-    return imstreak_t
+    return imstreak.T
 
 
 def streakimdef(img, timeaxis):
@@ -182,20 +171,21 @@ def streakimdef(img, timeaxis):
     img_t = img.T
 
     # for each row in img, interpolate the intensity values to linear time axis
-    im_interpol = np.zeros_like(img_t)
+    f_interpolate = np.zeros_like(img_t)
     for i in range(img_t.shape[0]):
         f_linear = interpolate.interp1d(timeaxis, img_t[i])
-        im_interpol[i] = f_linear(x_linear)
+        f_interpolate[i] = f_linear(x_linear)
 
-    imstreak_t = im_interpol.T
+    imstreak_t = f_interpolate.T
     return imstreak_t
+
 
 # ────────────────────────────────────────────────────────────
 # Test - 1
 test_img = (np.ones((512, 672)).T * np.linspace(0, 5000, 512)).T
 
 intp_img = copy.deepcopy(test_img)
-intp_img = streakimdef(intp_img, timeaxis)
+intp_img = streakimdef_old(intp_img, timeaxis)
 
 # Plot original image
 fig = plt.figure(figsize=(13, 13))
@@ -226,10 +216,10 @@ plt.xlabel('Space')
 plt.ylabel('Time')
 plt.tight_layout()
 plt.savefig(f'{logdir}/3-1-3-Interpolated_Image.pdf')
-
+# %%
 # ────────────────────────────────────────────────────────────
 # Test - 2
-test_img = (np.ones((512, 672)) * np.linspace(0,5000,672))
+test_img = (np.ones((512, 672)) * np.linspace(0, 5000, 672))
 
 intp_img = copy.deepcopy(test_img)
 intp_img = streakimdef(intp_img, timeaxis)
@@ -267,41 +257,41 @@ plt.savefig(f'{logdir}/3-2-3-Interpolated_Image.pdf')
 # ────────────────────────────────────────────────────────────
 # Test - 3
 test_img = np.ones((512, 672))
-test_img[10] *= np.linspace(0,5000,672)
-test_img[11] *= np.linspace(0,5000,672)
+test_img[10] *= np.linspace(0, 5000, 672)
+test_img[11] *= np.linspace(0, 5000, 672)
 
-test_img[50,0:200] += 5000
-test_img[51,0:200] += 5000
+test_img[50, 0:200] += 5000
+test_img[51, 0:200] += 5000
 
-test_img[100,200:400] += 5000
-test_img[101,200:400] += 5000
+test_img[100, 200:400] += 5000
+test_img[101, 200:400] += 5000
 
-test_img[150,400:672] += 5000
-test_img[151,400:672] += 5000
+test_img[150, 400:672] += 5000
+test_img[151, 400:672] += 5000
 
-test_img[200,0:200] += 5000
-test_img[201,0:200] += 5000
+test_img[200, 0:200] += 5000
+test_img[201, 0:200] += 5000
 
-test_img[250,200:400] += 5000
-test_img[251,200:400] += 5000
+test_img[250, 200:400] += 5000
+test_img[251, 200:400] += 5000
 
-test_img[300,400:672] += 5000
-test_img[301,400:672] += 5000
+test_img[300, 400:672] += 5000
+test_img[301, 400:672] += 5000
 
-test_img[325] *= np.linspace(0,5000,672)
-test_img[326] *= np.linspace(0,5000,672)
+test_img[325] *= np.linspace(0, 5000, 672)
+test_img[326] *= np.linspace(0, 5000, 672)
 
-test_img[350,0:200] += 5000
-test_img[351,0:200] += 5000
+test_img[350, 0:200] += 5000
+test_img[351, 0:200] += 5000
 
-test_img[400,200:400] += 5000
-test_img[401,200:400] += 5000
+test_img[400, 200:400] += 5000
+test_img[401, 200:400] += 5000
 
-test_img[450,400:672] += 5000
-test_img[451,400:672] += 5000
+test_img[450, 400:672] += 5000
+test_img[451, 400:672] += 5000
 
-test_img[500,0:200] += 5000
-test_img[501,0:200] += 5000
+test_img[500, 0:200] += 5000
+test_img[501, 0:200] += 5000
 
 intp_img = copy.deepcopy(test_img)
 intp_img = streakimdef(intp_img, timeaxis)
@@ -338,7 +328,7 @@ plt.savefig(f'{logdir}/3-3-3-Interpolated_Image.pdf')
 
 # ────────────────────────────────────────────────────────────
 # Test - 4 - AWAKE Image
-test_img = adl.get_data_at_index(3).get_image()
+test_img = adl.get_data_at_index(3).get_image(linearize_time_axis=False)
 
 intp_img = copy.deepcopy(test_img)
 intp_img = streakimdef(intp_img, timeaxis)
@@ -376,7 +366,7 @@ plt.savefig(f'{logdir}/3-4-3-Interpolated_Image.pdf')
 # ────────────────────────────────────────────────────────────
 #  AWAKE Image interpolation using SciPy interpolate.interp2d
 
-test_img = adl.get_data_at_index(3).get_image()
+test_img = adl.get_data_at_index(3).get_image(linearize_time_axis=False)
 
 intp_img = copy.deepcopy(test_img)
 intp_img = streakimdef_old(intp_img, timeaxis)
